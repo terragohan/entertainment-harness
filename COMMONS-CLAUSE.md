@@ -1,0 +1,40 @@
+# Commons Clause License Condition
+
+The software in this repository is licensed under the **GNU General Public License
+v3.0 only** (see [LICENSE](LICENSE)), subject to the additional condition below.
+
+## Plain English
+
+- You **can** use, run, study, modify, and redistribute the software — including
+  inside a company — as long as you keep the copyright notices and license texts.
+- You **cannot** sell the software, or offer a paid product or service whose value
+  derives substantially from it (including paid hosting of it), without the
+  licensor's permission.
+- In short: free to use and share with attribution; commercial resale or hosting
+  needs a separate agreement. Contact: abraham@elmahrek.com.
+
+Because of this additional condition, the project is **source-available**, not
+"open source" as defined by the Open Source Initiative.
+
+## "Commons Clause" License Condition v1.0
+
+The Software is provided to you by the Licensor under the License, as defined
+below, subject to the following condition.
+
+Without limiting other conditions in the License, the grant of rights under the
+License will not include, and the License does not grant to you, the right to
+Sell the Software.
+
+For purposes of the foregoing, "Sell" means practicing any or all of the rights
+granted to you under the License to provide to third parties, for a fee or other
+consideration (including without limitation fees for hosting or consulting/
+support services related to the Software), a product or service whose value
+derives, entirely or substantially, from the functionality of the Software. Any
+license notice or attribution required by the License must also include this
+Commons Clause License Condition notice.
+
+- Software: entertainment-harness
+- License: GPL-3.0
+- Licensor: Abraham Elmahrek
+
+Full text and FAQ: <https://commonsclause.com>

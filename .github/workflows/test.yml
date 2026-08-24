@@ -1,0 +1,31 @@
+# Python test suite on every push/PR.
+#
+# Runs on macOS to match the dev environment (Apple-silicon paths, ffmpeg
+# from the runner image). The single deselected test is the known
+# pre-existing failure documented in AGENTS.md (Python 3.13 json
+# strictness); everything else must stay green.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run tests
+        run: >
+          uv run pytest -q
+          --deselect tests/test_lfm.py::test_repair_json_repairs_trailing_comma
