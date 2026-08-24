@@ -1,0 +1,18 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"baseUrl": ".",
+		"paths": {
+			"electrobun": ["./types/electrobun.d.ts"],
+			"electrobun/bun": ["./types/electrobun.d.ts"],
+			"electrobun/view": ["./types/electrobun.d.ts"]
+		},
+		"lib": ["ES2022", "DOM", "DOM.Iterable"]
+	},
+	"include": ["src", "types", "electrobun.config.ts"]
+}

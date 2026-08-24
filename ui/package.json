@@ -1,0 +1,19 @@
+{
+  "name": "entertainment-harness-ui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "electrobun dev",
+    "build": "electrobun build",
+    "build:backend": "cd .. && uv run pyinstaller packaging/eh-serve.spec --distpath ui/resources/backend --workpath packaging/build --noconfirm",
+    "package": "bun run build:backend && electrobun build --env=stable",
+    "typecheck": "tsc --noEmit",
+    "smoke": "bun run scripts/smoke.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "electrobun": "1.18.1",
+    "linkedom": "^0.18.13",
+    "typescript": "^5.6.0"
+  }
+}

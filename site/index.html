@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entertainment Harness — a local-first entertainment system</title>
+  <meta name="description" content="A local-first entertainment system: track a manga and book library on your own machine, then turn chapters into narrated recap videos. Desktop app for macOS.">
+  <link rel="icon" href="assets/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" href="assets/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Entertainment Harness">
+  <meta property="og:description" content="A local-first entertainment system — media library, recaps, and video.">
+  <meta property="og:image" content="https://terragohan.com/assets/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="styles.css">
+  <!--
+    PUBLISH CHECKLIST (before/just after pushing public):
+    1. Repo Settings -> Pages -> Source: "GitHub Actions". The custom domain
+       terragohan.com comes from site/CNAME — point the apex DNS at GitHub
+       Pages (A records to 185.199.108.0/22) and enforce HTTPS once live.
+    2. Bump the version badge in the hero on each release (currently v0.1.0).
+    3. Screenshots: drop captures into assets/screenshots/ named library.png,
+       work.png, player.png — or delete the #screenshots section. The section
+       hides itself per-image if a file is missing.
+    4. After the first tagged release builds a DMG (.github/workflows/release.yml),
+       restore the download buttons marked "DMG" below.
+  -->
+</head>
+<body>
+  <nav>
+    <div class="brand">
+      <img src="assets/logo-512.png" alt="" width="28" height="28">
+      <span>Entertainment Harness</span>
+    </div>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="#get-started">Get started</a>
+      <a href="https://github.com/terragohan/entertainment-harness">GitHub</a>
+      <!-- DMG: restore after the first tagged release
+      <a class="btn small" href="https://github.com/terragohan/entertainment-harness/releases/latest/download/EntertainmentHarness-macOS-arm64.dmg">Download</a>
+      -->
+    </div>
+  </nav>
+
+  <header class="hero">
+    <img class="mark" src="assets/logo-512.png" alt="Entertainment Harness logo" width="132" height="132">
+    <h1>Entertainment Harness</h1>
+    <p class="tagline">A local-first entertainment system.</p>
+    <p class="sub">
+      Track manga and books from real sources, then turn chapters into narrated
+      recap videos with local vision models — your library and artifacts never
+      leave your machine unless you opt in.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/terragohan/entertainment-harness">Get it on GitHub</a>
+      <a class="btn ghost" href="https://github.com/terragohan/entertainment-harness/tree/main/docs">Read the docs</a>
+      <!-- DMG: restore after the first tagged release
+      <a class="btn primary" href="https://github.com/terragohan/entertainment-harness/releases/latest/download/EntertainmentHarness-macOS-arm64.dmg">Download for macOS</a>
+      -->
+    </div>
+    <p class="meta">v0.1.0 &middot; macOS, Apple silicon &middot; runs from the repo (prebuilt DMG lands with the first tagged release)</p>
+  </header>
+
+  <main>
+    <section id="features">
+      <h2>What it does</h2>
+      <div class="grid">
+        <article>
+          <h3>Local-first library</h3>
+          <p>Works, read progress, recaps, and generated videos live in plain files
+             and SQLite under your data dir. No account, no tracking.</p>
+        </article>
+        <article>
+          <h3>Real sources</h3>
+          <p>Search and sync from MangaDex and Weeb Central, or import your own
+             CBZ/EPUB comics and books from files or URLs.</p>
+        </article>
+        <article>
+          <h3>Local models by default</h3>
+          <p>Ollama-hosted vision LLMs (Qwen3-VL by default) with hardware-aware
+             quantization policy. OpenRouter / vLLM are opt-in.</p>
+        </article>
+        <article>
+          <h3>Recap videos</h3>
+          <p>Chapter recaps with rolling story context, Kokoro TTS narration, and
+             Ken Burns motion over the real pages.</p>
+        </article>
+        <article>
+          <h3>Manga &rarr; anime scenes</h3>
+          <p>A guided storyboard pipeline: Runway keyframes from your panels,
+             assembled into short 16:9 clips. Cached per stage.</p>
+        </article>
+        <article>
+          <h3>Desktop app</h3>
+          <p>A native macOS app (Apple silicon) over the <code>eh serve</code> API —
+             browse, watch, and export without touching the terminal.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="screenshots">
+      <h2>Screenshots</h2>
+      <div class="shots">
+        <figure class="shot"><img src="assets/screenshots/library.png" alt="Library view" onerror="this.closest('figure').remove()"></figure>
+        <figure class="shot"><img src="assets/screenshots/work.png" alt="Work detail" onerror="this.closest('figure').remove()"></figure>
+        <figure class="shot"><img src="assets/screenshots/player.png" alt="Video player" onerror="this.closest('figure').remove()"></figure>
+      </div>
+    </section>
+
+    <section id="get-started">
+      <h2>Get started</h2>
+      <p>Requires <strong>Python &ge; 3.13</strong> and <strong>ffmpeg</strong>. Everything runs from a clone of the repo; the desktop app is macOS-only.</p>
+      <pre><code>git clone https://github.com/terragohan/entertainment-harness
+cd entertainment-harness
+uv sync
+
+uv run eh add "One Piece"       # search a source, add the series
+uv run eh sync                  # fetch its chapter list
+uv run eh recap "One Piece" --video --chapters 1
+uv run eh play "One Piece"      # watch the generated recap video</code></pre>
+      <p>The default model backend is <a href="https://ollama.com">Ollama</a>; remote
+         backends like OpenRouter are configured in
+         <code>~/.local/share/entertainment-harness/config.toml</code>.
+         Full details in the <a href="https://github.com/terragohan/entertainment-harness/tree/main/docs">docs</a>.</p>
+    </section>
+
+    <section id="license">
+      <h2>License</h2>
+      <p>
+        <strong>Source-available</strong> under
+        <a href="https://github.com/terragohan/entertainment-harness/blob/main/LICENSE">GPL-3.0</a>
+        with the
+        <a href="https://github.com/terragohan/entertainment-harness/blob/main/COMMONS-CLAUSE.md">Commons Clause</a>:
+        free to use, study, modify, and redistribute with attribution; selling the
+        software or offering it as a paid hosted service requires the licensor's
+        permission. Because of that clause this is intentionally not OSI "open source".
+      </p>
+      <p>
+        Videos you generate are yours — but the source manga/books are copyrighted
+        by their authors and publishers, so treat recap videos as personal media.
+        See
+        <a href="https://github.com/terragohan/entertainment-harness#using-generated-content">Using generated content</a>
+        in the README before uploading anything to sharing platforms.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <img src="assets/logo-512.png" alt="" width="20" height="20">
+    <span>Entertainment Harness &middot; by Abraham Elmahrek &middot;
+      <a href="https://github.com/terragohan/entertainment-harness">GitHub</a></span>
+  </footer>
+</body>
+</html>
