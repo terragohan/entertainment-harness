@@ -140,5 +140,32 @@ bun run dev   # builds and launches the app against your data dir</code></pre>
       <a href="https://terragohan.com">terragohan.com</a> &middot;
       <a href="https://github.com/terragohan/entertainment-harness">GitHub</a></span>
   </footer>
+
+  <div class="lightbox" id="lightbox">
+    <button class="lightbox-close" id="lightbox-close" aria-label="Close">&times;</button>
+    <img src="" alt="">
+  </div>
+  <script>
+    (() => {
+      const lb = document.getElementById("lightbox");
+      const lbImg = lb.querySelector("img");
+      for (const img of document.querySelectorAll(".shots img")) {
+        img.addEventListener("click", () => {
+          lbImg.src = img.src;
+          lbImg.alt = img.alt;
+          lb.classList.add("open");
+          document.body.style.overflow = "hidden";
+        });
+      }
+      const close = () => {
+        lb.classList.remove("open");
+        document.body.style.overflow = "";
+      };
+      lb.addEventListener("click", (e) => { if (e.target !== lbImg) close(); });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && lb.classList.contains("open")) close();
+      });
+    })();
+  </script>
 </body>
 </html>
