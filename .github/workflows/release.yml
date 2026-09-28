@@ -36,14 +36,14 @@ jobs:
       - name: Build frozen backend
         run: cd ui && bun run build:backend
 
-      - name: Gate: frozen backend imports + TTS smoke
+      - name: "Gate: frozen backend imports + TTS smoke"
         # Catches packaging regressions (e.g. espeak-ng data dir) before the
         # app is bundled. --check-tts synthesizes one line through Kokoro.
         run: |
           ui/resources/backend/eh-serve/eh-serve --check-imports
           ui/resources/backend/eh-serve/eh-serve --check-tts
 
-      - name: Gate: TTS smoke from a deep install path
+      - name: "Gate: TTS smoke from a deep install path"
         # espeak-ng stores its data path in a ~160-byte fixed buffer and
         # silently falls back to a bogus compiled-in path beyond that; the
         # shallow build path above is short enough to hide it. Re-run the

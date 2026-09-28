@@ -9,9 +9,16 @@ local fakes.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
+
+# Rich snapshots COLUMNS into Console instances at construction, and the CLI
+# builds its console at import time. CI runners export COLUMNS=0, which would
+# freeze every console at width 0 and swallow all output — pin a wide
+# terminal before any test module imports the package.
+os.environ["COLUMNS"] = "200"
 
 from entertainment_harness import db
 from entertainment_harness.pipelines import recap as recap_mod

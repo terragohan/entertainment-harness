@@ -261,16 +261,20 @@ def test_registry_refuses_when_no_remote_quant_fits(tmp_path, monkeypatch):
 
 
 @respx.mock
-def test_quantize_refuses_published_quant(tmp_path):
+def test_quantize_refuses_published_quant(tmp_path, monkeypatch):
     _mock_repo()
+    # llama-quantize presence is machine-dependent; the validations under
+    # test run after the binary lookup, so stub it as found.
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/llama-quantize")
     with pytest.raises(QuantizeError, match="already publishes"):
         quantize(REPO, "Q4_K_M", adapter=HFAdapter(models_dir=tmp_path),
                  confirm=lambda msg: True, log=lambda m: None)
 
 
 @respx.mock
-def test_quantize_requires_source_and_confirmation(tmp_path):
+def test_quantize_requires_source_and_confirmation(tmp_path, monkeypatch):
     _mock_repo()
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/llama-quantize")
     adapter = HFAdapter(models_dir=tmp_path)
     # user declines
     with pytest.raises(QuantizeError, match="Aborted"):
