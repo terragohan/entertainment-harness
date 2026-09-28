@@ -68,8 +68,9 @@ cd ui && EH_DATA_DIR=/tmp/eh-demo-data bun run dev
   voices built in; macOS `say`; optional voice cloning via mlx-audio.
 - **Eight video modes** — from classic Ken Burns to AI frame-by-frame
   animation (see [Video modes](#video-modes)).
-- **Manga → anime scenes** — guided storyboard → Runway keyframes → short
-  shots → one 16:9 mp4 (`eh anime-scene`).
+- **Manga → anime scenes** — guided storyboard → keyframes and short shots
+  from the video model of your choice (Runway `gen4.5` by default) → one
+  16:9 mp4 (`eh anime-scene`).
 - **Shorts** — vertical 1080×1920 whole-work summary videos with web-search
   grounding (`eh online-summary`, `eh tiktok`).
 - **Desktop app** — Electrobun UI speaking to `eh serve` (macOS, Apple
@@ -240,8 +241,10 @@ a higher grain; videos follow the artifact's grain.
 | `animate` | AI-generated animation frames per panel (`[frames]` provider) |
 | `sequence` | panel outpainted to video size, AI frames chained into motion (`[sequence]` provider) |
 
-`animate` and `sequence` need an image-generation provider (OpenRouter
-image models or Runway) configured in `[frames]` / `[sequence]`.
+`animate` and `sequence` run on the image model of your choice — Runway or
+any OpenRouter image model — configured in `[frames]` / `[sequence]`
+(provider defaults: Runway `gen4_image`, OpenRouter
+`google/gemini-2.5-flash-image`).
 
 ### Voices
 
