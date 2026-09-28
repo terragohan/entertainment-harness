@@ -151,6 +151,23 @@ def _opf_path(zf: zipfile.ZipFile) -> str:
     return rootfile.get("full-path")
 
 
+def read_epub_author(path: Path) -> str | None:
+    """The EPUB's first dc:creator, if any — the byline for video credits."""
+    ns = {
+        "opf": "http://www.idpf.org/2007/opf",
+        "dc": "http://purl.org/dc/elements/1.1/",
+    }
+    try:
+        with zipfile.ZipFile(path) as zf:
+            opf = ElementTree.fromstring(zf.read(_opf_path(zf)))
+    except (zipfile.BadZipFile, ImportFailure, ElementTree.ParseError, KeyError):
+        return None
+    creator = opf.find(".//opf:metadata/dc:creator", ns)
+    if creator is None or not (creator.text or "").strip():
+        return None
+    return creator.text.strip()
+
+
 def read_epub(path: Path) -> tuple[list[str], bytes | None, str | None]:
     """Return (spine-ordered part texts, cover bytes, cover extension)."""
     ns = {"opf": "http://www.idpf.org/2007/opf"}
@@ -392,6 +409,12 @@ def _import_book(conn, series_id: str, path: Path, config: Config, log) -> None:
     ext = path.suffix.lower()
     if ext == ".epub":
         parts, cover, cover_ext = read_epub(path)
+        author = read_epub_author(path)
+        if author:
+            meta = works.read_work_metadata(series_id)
+            if meta is not None:
+                meta.author = author
+                works.write_work_metadata(meta)
     else:
         parts, cover, cover_ext = split_text(path.read_text(errors="replace")), None, None
     parts = _merge_small([p for p in (pt.strip() for pt in parts) if p])

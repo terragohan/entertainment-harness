@@ -161,6 +161,11 @@ class VideoConfig:
     # Keep the full-quality master out.mp4 when a compressed copy exists.
     # False makes the compressed copy the deliverable (eh play, store).
     keep_master: bool = True
+    # Append the credits end card (work, author when known, source, chapter,
+    # and the tool) to every rendered video. Sharing generated content
+    # requires that attribution (see SHARING.md); turn off only for private
+    # viewing. render_state.json records it, so toggling re-renders.
+    credits: bool = True
     # Anchored-scroll Phase 4: build the video script from the chapter's
     # cached panel beats (segments born with their panel spans; no recap
     # artifact, page assignment, or grounding judge). This is the default
@@ -407,6 +412,7 @@ def parse_config(raw: dict) -> Config:
     config.video.steering_prompt = str(video.get("steering_prompt", ""))
     config.video.compress = str(video.get("compress", ""))
     config.video.keep_master = bool(video.get("keep_master", True))
+    config.video.credits = bool(video.get("credits", True))
     config.video.panel_first = bool(video.get("panel_first", True))
 
     tts = raw.get("tts", {})

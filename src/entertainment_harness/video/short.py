@@ -29,6 +29,7 @@ from entertainment_harness.video.assemble import (
     video_duration,
 )
 from entertainment_harness.video.cards import render_cards
+from entertainment_harness.video.credits import CREDITS_SECONDS, Credits
 from entertainment_harness.video.gen import get_provider as get_video_gen_provider
 from entertainment_harness.video.pipeline import (
     clear_downstream,
@@ -222,9 +223,24 @@ def build_short(
         render_paths = page_paths
 
     # --- stage 4: assembly ---------------------------------------------------
+    credits = None
+    if config.video.credits:
+        meta = works.read_work_metadata(series["id"])
+        credits = Credits(
+            title=title,
+            source=series["source"],
+            author=meta.author if meta is not None else None,
+        )
+    state_path = workdir / "render_state.json"
     if out_path.exists():
         log("Stage 4/4 assembly: cached")
         duration = sum(s.duration_s for s in segments)
+        try:
+            rendered_state = json.loads(state_path.read_text())
+        except (FileNotFoundError, json.JSONDecodeError):
+            rendered_state = {}
+        if rendered_state.get("credits"):
+            duration += CREDITS_SECONDS
     else:
         gen = get_video_gen_provider(chosen_gen, config)
         log(f"Stage 4/4 assembly: rendering (1080x1920) with {gen.name}...")
@@ -232,6 +248,7 @@ def build_short(
             out_path, duration = assemble(
                 segments, render_paths, workdir, RESOLUTION, log,
                 min_page_seconds=MIN_PAGE_SECONDS,
+                credits=credits,
             )
         else:
             clips: list[Path] = []
@@ -241,10 +258,11 @@ def build_short(
                 seg.duration_s = video_duration(clip)
                 clips.append(clip)
                 log(f"  segment {seg.index:02d}: generated ({seg.duration_s:.1f}s)")
-            out_path, duration = mux_clips(segments, clips, workdir, log)
-        state_path = workdir / "render_state.json"
+            out_path, duration = mux_clips(segments, clips, workdir, log,
+                                           credits=credits)
         state_path.write_text(
-            json.dumps({"format": "tiktok", "video_gen": gen.name})
+            json.dumps({"format": "tiktok", "video_gen": gen.name,
+                        "credits": credits is not None})
         )
         now = utcnow()
         existing = conn.execute(

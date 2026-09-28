@@ -16,6 +16,7 @@ from PIL import Image
 
 from entertainment_harness import db
 from entertainment_harness.config import Config, data_dir
+from entertainment_harness.library import works
 from entertainment_harness.library.importer import (
     ImportFailure,
     _merge_small,
@@ -65,10 +66,10 @@ def _xhtml(heading: str, words: int = 400) -> str:
     )
 
 
-def _make_epub(path: Path) -> Path:
+def _make_epub(path: Path, opf: str = OPF) -> Path:
     with zipfile.ZipFile(path, "w") as zf:
         zf.writestr("META-INF/container.xml", CONTAINER_XML)
-        zf.writestr("OEBPS/content.opf", OPF)
+        zf.writestr("OEBPS/content.opf", opf)
         zf.writestr("OEBPS/ch1.xhtml", _xhtml("Chapter 1"))
         zf.writestr("OEBPS/ch2.xhtml", _xhtml("Chapter 2"))
         zf.writestr("OEBPS/cover.png", _png_bytes())
@@ -252,3 +253,16 @@ def test_import_missing_file(env):
     conn, _ = env
     with pytest.raises(ImportFailure, match="No such file"):
         import_work(conn, Config(), "/nonexistent/book.epub", log=lambda m: None)
+
+
+def test_import_epub_stores_author_in_work_metadata(env):
+    conn, tmp = env
+    opf = OPF.replace(
+        "<dc:title>Test Book</dc:title>",
+        "<dc:title>Test Book</dc:title>\n    <dc:creator>Jane Author</dc:creator>",
+    )
+    epub = _make_epub(tmp / "test-book.epub", opf=opf)
+    series = import_work(conn, Config(), str(epub), log=lambda m: None)
+    meta = works.read_work_metadata(series["id"])
+    assert meta is not None
+    assert meta.author == "Jane Author"

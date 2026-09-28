@@ -19,6 +19,11 @@ from pathlib import Path
 
 from PIL import Image
 
+from entertainment_harness.video.credits import (
+    CREDITS_SECONDS,
+    Credits,
+    card_path,
+)
 from entertainment_harness.video.script import (
     Segment,
     VideoConfigError,
@@ -444,14 +449,30 @@ def mux_clips(
     clips: list[Path],
     workdir: Path,
     log=lambda m: None,
+    credits: Credits | None = None,
 ) -> tuple[Path, float]:
     """Concatenate pre-rendered clips and mux with narration + subtitles.
 
     Returns (out.mp4, total_seconds). The caller is responsible for ensuring
     segment durations match the actual clip durations.
+
+    With `credits`, a static end card (video/credits.py) is appended after
+    the last segment — a clip matching the first clip's format plus equal
+    silence — and included in the returned duration.
     """
     srt = workdir / "subs.srt"
     write_srt(segments, srt)
+
+    clip_list = list(clips)
+    credits_s = 0.0
+    if credits is not None and clips and segments:
+        _, w, h, _ = probe_format(clips[0])
+        card = card_path(credits, (w, h), workdir)
+        dest = card.with_suffix(".mp4")
+        if not dest.exists():
+            build_clip(card, CREDITS_SECONDS, "static", (w, h), dest)
+        clip_list.append(dest)
+        credits_s = CREDITS_SECONDS
 
     no_subs = workdir / "out-nosubs.mp4"
     wavs: list[Path] = []
@@ -460,10 +481,12 @@ def mux_clips(
         wavs.append(seg_wav)
         if seg.pause_after_s > 0:  # breathing room between beats
             wavs.append(_gap_wav(workdir, seg.pause_after_s, seg_wav))
+    if credits_s:
+        wavs.append(_gap_wav(workdir, credits_s, wavs[-1]))
     _run([
         "ffmpeg", "-y",
         "-f", "concat", "-safe", "0",
-        "-i", str(_concat_list(clips, "clips.txt", workdir)),
+        "-i", str(_concat_list(clip_list, "clips.txt", workdir)),
         "-f", "concat", "-safe", "0",
         "-i", str(_concat_list(wavs, "wavs.txt", workdir)),
         "-map", "0:v", "-map", "1:a",
@@ -480,7 +503,7 @@ def mux_clips(
         "-metadata:s:s:0", "language=eng", str(out),
     ])
     no_subs.unlink()
-    duration = sum(_slot_s(seg) for seg in segments)
+    duration = sum(_slot_s(seg) for seg in segments) + credits_s
     return out, duration
 
 
@@ -494,13 +517,15 @@ def assemble(
     frame_animator=None,
     sequence_interp_fps: int = FPS,
     sequence_critic=None,
+    credits: Credits | None = None,
 ) -> tuple[Path, float]:
     """Render clips, concat, mux narration + subtitles. Returns (out, seconds).
 
     `frame_animator` (a video.frames provider) is consulted by "animate"- and
     "sequence"-motion segments; None or a non-animated provider renders the
     panels-mode Ken Burns crop instead. `sequence_critic` (a drift critic,
-    video/sequence.py) is passed through to the sequence animator."""
+    video/sequence.py) is passed through to the sequence animator. `credits`
+    appends the attribution end card (video/credits.py)."""
     clips_dir = workdir / "clips"
     clips_dir.mkdir(parents=True, exist_ok=True)
     clips: list[Path] = []
@@ -676,7 +701,7 @@ def assemble(
                 log(f"  clip-{seg.index:02d}-{slot}: rendered"
                     f" (page {page_num}, {per_page:.1f}s)")
             clips.append(dest)
-    return mux_clips(segments, clips, workdir, log)
+    return mux_clips(segments, clips, workdir, log, credits=credits)
 
 
 def pacing_stats(

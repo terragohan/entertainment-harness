@@ -205,6 +205,7 @@ class WorkMetadata:
     kind: str = "manga"
     alt_titles: list[str] = field(default_factory=list)
     status: str | None = None
+    author: str | None = None  # byline for credits end cards; EPUB imports fill it
     progress: WorkProgress = field(default_factory=WorkProgress)
     context: WorkContext = field(default_factory=WorkContext)
     online_summary: OnlineSummary | None = None
@@ -231,6 +232,7 @@ class WorkMetadata:
             kind=d.get("kind", "manga"),
             alt_titles=d.get("alt_titles", []),
             status=d.get("status"),
+            author=d.get("author"),
             progress=progress,
             context=context,
             online_summary=online,
