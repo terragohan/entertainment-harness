@@ -61,6 +61,7 @@ code {
   margin: 0 0 10px;
   text-shadow: 0 0 14px rgba(69, 227, 255, 0.45);
 }
+.eyebrow a { color: inherit; }
 
 h1, h2, h3, nav .brand { font-family: var(--display); }
 
