@@ -167,13 +167,10 @@ bun install
 bun run dev        # builds and launches the app against your real data dir
 ```
 
-The app spawns `uv run eh serve` from the repo and connects to it. To build
-a double-clickable `EntertainmentHarness.app` + DMG (embeds a frozen
-backend, no repo needed at runtime), see [`ui/README.md`](ui/README.md):
-
-```sh
-cd ui && bun run package       # DMG lands in ui/artifacts/
-```
+The app runs from the checkout: it spawns `uv run eh serve` from the repo
+and connects to it. Building a self-contained `EntertainmentHarness.app`
+(embeds a frozen backend, no repo needed at runtime) is a maintainer flow —
+see [`ui/README.md`](ui/README.md) if you need it.
 
 ## Configuration
 
