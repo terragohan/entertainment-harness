@@ -94,5 +94,5 @@ contributions/commenters that can't manage it.
 By submitting a contribution you agree it is licensed under the project's
 license: [GPL-3.0](LICENSE) with the
 [Commons Clause](COMMONS-CLAUSE.md) condition, copyright the project
-licensor (Abraham Elmahrek). If that's a problem (e.g. your employer's
-policy), talk to us first: abraham@elmahrek.com.
+licensor (Terra Gohan). If that's a problem (e.g. your employer's
+policy), talk to us first via <https://terragohan.com>.

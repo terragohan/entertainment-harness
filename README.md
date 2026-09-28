@@ -369,7 +369,7 @@ cd ui && bun install && bun run typecheck && bun run smoke
 - You **cannot** sell the software, or offer a paid product or hosted
   service whose value derives substantially from it, without the licensor's
   permission (that's the Commons Clause). For commercial licensing:
-  abraham@elmahrek.com.
+  Terra Gohan — <https://terragohan.com>.
 
 Because of the Commons Clause this project is intentionally **not** OSI
 "open source" — "source-available" is the honest label.

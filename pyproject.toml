@@ -3,7 +3,7 @@ name = "entertainment-harness"
 version = "0.1.0"
 description = "A local-first entertainment system: media library, recap generator, and video pipeline"
 authors = [
-    { name = "Abraham Elmahrek", email = "abraham@elmahrek.com" }
+    { name = "Terra Gohan" }
 ]
 requires-python = ">=3.13"
 license = "GPL-3.0-only"
