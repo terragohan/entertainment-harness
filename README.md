@@ -368,8 +368,8 @@ cd ui && bun install && bun run typecheck && bun run smoke
   source (that's the GPL part).
 - You **cannot** sell the software, or offer a paid product or hosted
   service whose value derives substantially from it, without the licensor's
-  permission (that's the Commons Clause). For commercial licensing:
-  Terra Gohan — <https://terragohan.com>.
+  permission (that's the Commons Clause). For commercial licensing, open
+  an issue: <https://github.com/terragohan/entertainment-harness/issues>.
 
 Because of the Commons Clause this project is intentionally **not** OSI
 "open source" — "source-available" is the honest label.

@@ -11,7 +11,8 @@ v3.0 only** (see [LICENSE](LICENSE)), subject to the additional condition below.
   derives substantially from it (including paid hosting of it), without the
   licensor's permission.
 - In short: free to use and share with attribution; commercial resale or hosting
-  needs a separate agreement. Contact: Terra Gohan — <https://terragohan.com>.
+  needs a separate agreement. Reach Terra Gohan by opening an issue:
+  <https://github.com/terragohan/entertainment-harness/issues>.
 
 Because of this additional condition, the project is **source-available**, not
 "open source" as defined by the Open Source Initiative.
