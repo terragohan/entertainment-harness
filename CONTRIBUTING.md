@@ -34,10 +34,6 @@ cd ui && bun run smoke           # headless UI test against a real eh serve
 - The python suite has **one known pre-existing failure**:
   `tests/test_lfm.py::test_repair_json_repairs_trailing_comma` (Python 3.13
   json strictness). Everything else must be green.
-- If your change affects what gets packaged into the desktop app (new
-  imports, new runtime data files), also run
-  `cd ui && bun run build:backend` and
-  `ui/resources/backend/eh-serve/eh-serve --check-imports`.
 - Run only one app/`eh serve` instance per data directory — SQLite is
   single-writer. Point `EH_DATA_DIR` at a scratch dir in dev.
 

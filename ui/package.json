@@ -5,8 +5,6 @@
   "scripts": {
     "dev": "electrobun dev",
     "build": "electrobun build",
-    "build:backend": "cd .. && uv run pyinstaller packaging/eh-serve.spec --distpath ui/resources/backend --workpath packaging/build --noconfirm",
-    "package": "bun run build:backend && electrobun build --env=stable",
     "typecheck": "tsc --noEmit",
     "smoke": "bun run scripts/smoke.ts"
   },

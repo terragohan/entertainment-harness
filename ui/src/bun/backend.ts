@@ -3,21 +3,17 @@
  * first stdout line, wait for /api/health, and make sure the child never
  * outlives the app.
  *
- * Two modes, chosen by backendCommand():
- *   prod (packaged .app) — the PyInstaller-frozen eh-serve binary that the
- *     Electrobun build copies into Contents/Resources/app/backend/eh-serve/
- *     (see electrobun.config.ts `build.copy` and `bun run build:backend`).
- *     Detected by the binary being present next to the app bundle.
- *   dev (`bun run dev`) — `uv run eh serve` from the repo checkout.
+ * The app always runs from a repo checkout: `uv run eh serve` from the repo
+ * root (there is no packaged/frozen-backend distribution).
  *
  * Environment:
  *   EH_REPO_ROOT — override repo-root detection (must contain pyproject.toml
- *                  and src/entertainment_harness); dev mode only
+ *                  and src/entertainment_harness)
  *   EH_DATA_DIR  — forwarded to the backend; point it at a scratch data dir
  *                  in dev so the app never writes the real config.toml
  */
 import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import type { Subprocess } from "bun";
 import type { BackendState } from "../shared/schema";
 
@@ -53,40 +49,13 @@ export function findRepoRoot(): string | null {
 	return null;
 }
 
-/**
- * Absolute path of the PyInstaller binary inside the packaged .app, or null
- * when running unpackaged (`bun run dev`). In the bundle, process.execPath
- * is Contents/MacOS/<launcher> and build.copy entries land in
- * Contents/Resources/app/.
- */
-export function bundledBackendPath(): string | null {
-	const candidate = resolve(
-		dirname(process.execPath),
-		"..",
-		"Resources",
-		"app",
-		"backend",
-		"eh-serve",
-		"eh-serve",
-	);
-	return existsSync(candidate) ? candidate : null;
-}
-
 export function backendCommand(): BackendCommand {
 	const env: Record<string, string> = {};
 	if (process.env.EH_DATA_DIR) env.EH_DATA_DIR = process.env.EH_DATA_DIR;
 	// Launched from Finder, PATH is /usr/bin:/bin:/usr/sbin:/sbin — but the
-	// backend shells out to ffmpeg/ffprobe (and uv in dev), which on this
+	// backend shells out to ffmpeg/ffprobe (and uv itself), which on this
 	// machine live under Homebrew prefixes.
 	env.PATH = `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}`;
-	const bundled = bundledBackendPath();
-	if (bundled) {
-		return {
-			cmd: [bundled, "serve", "--port", "0"],
-			cwd: dirname(bundled),
-			env,
-		};
-	}
 	const repoRoot = findRepoRoot();
 	if (!repoRoot) {
 		throw new Error(

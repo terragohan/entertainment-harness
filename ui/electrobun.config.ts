@@ -16,11 +16,6 @@ export default {
 				entrypoint: "src/mainview/index.html",
 			},
 		},
-		copy: {
-			// PyInstaller output staged by `bun run build:backend`; lands in
-			// Contents/Resources/app/backend/eh-serve/ inside the .app.
-			"resources/backend/eh-serve": "backend/eh-serve",
-		},
 		mac: {
 			bundleCEF: false,
 		},
