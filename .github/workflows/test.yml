@@ -25,6 +25,19 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: DEBUG help output
+        run: |
+          uv run python -c "import sys, typer, rich, click; print('py', sys.version); print('typer', typer.__version__); print('rich', rich.__version__); print('click', click.__version__)"
+          uv run python -c "
+          import os
+          print('COLUMNS=', os.environ.get('COLUMNS'), 'TERM=', os.environ.get('TERM'), 'LANG=', os.environ.get('LANG'))
+          from typer.testing import CliRunner
+          from entertainment_harness.cli import app
+          r = CliRunner().invoke(app, ['recap', '--help'])
+          print('exit', r.exit_code, 'len', len(r.output))
+          print(repr(r.output[:1500]))
+          "
+
       - name: Run tests
         run: >
           uv run pytest -q
