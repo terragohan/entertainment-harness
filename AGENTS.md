@@ -19,7 +19,7 @@ Guidance for AI agents working in this repo.
 
 ## Code conventions
 
-- Python, `uv` for everything (`uv run pytest`, `uv run eh …`). 928 of 929 tests must stay green (one known pre-existing failure: `tests/test_lfm.py::test_repair_json_repairs_trailing_comma`, Python 3.13 json strictness; CI deselects it via `.github/workflows/test.yml`).
+- Python, `uv` for everything (`uv run pytest`, `uv run eh …`). 947 of 948 tests must stay green (one known pre-existing failure: `tests/test_lfm.py::test_repair_json_repairs_trailing_comma`, Python 3.13 json strictness; CI deselects it via `.github/workflows/test.yml`).
 - Desktop app: `ui/` is a self-contained Electrobun (Bun/TypeScript) project — use `cd ui && bun run typecheck` and `bun run smoke` (headless UI test against a real `eh serve`); packaging via `bun run package` (see `ui/README.md`). Run only one app/`eh serve` instance per data dir (sqlite write-lock).
 - Typer CLI (`src/entertainment_harness/cli/`), works layout helpers in `library/works.py`, DB migrations are additive-only `ALTER TABLE`s in `db.py`.
 - When you change behavior documented in `docs/design.md`, update the doc in the same change.

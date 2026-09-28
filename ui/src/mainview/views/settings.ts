@@ -537,6 +537,10 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
 			row("video.colorize"),
 			row("video.translated"),
 			row("video.keep_master"),
+			row("video.credits", {
+				label: "Credits end card",
+				help: "attribution card appended to every video — required on shared content (see SHARING.md)",
+			}),
 			row("video.panel_first"),
 			row("video.steering_prompt", { kind: "textarea" }),
 			...ttsNodes,

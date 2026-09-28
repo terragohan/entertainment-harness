@@ -42,6 +42,7 @@ from entertainment_harness.video.assemble import (
 )
 from entertainment_harness.video.cards import render_cards
 from entertainment_harness.video.compress import compress as compress_video
+from entertainment_harness.video.credits import CREDITS_SECONDS, Credits
 from entertainment_harness.video.gen import (
     get_provider as get_video_gen_provider,
 )
@@ -347,6 +348,7 @@ def build_video(
                 "Books have no pages to render — use video mode 'cards'"
                 f" (got {mode!r})."
             )
+    credits_enabled = config.video.credits
     wanted = {
         "colorize": colorize_enabled,
         "translated": translated_enabled,
@@ -356,6 +358,9 @@ def build_video(
         # Render states from before the flag existed default to False via
         # state.get(k, False), so plain builds don't spuriously re-render.
         "panel_first": panel_first_enabled,
+        # Old renders predate the end card: with credits on they mismatch
+        # once and re-mux to gain it (clips/TTS are cached — assembly only).
+        "credits": credits_enabled,
     }
     if mode in ("scroll", "panels", "animate", "sequence"):
         # Anchored renders (Phase 3 grounding): scroll renders from before
@@ -646,9 +651,20 @@ def build_video(
 
     rendered = False
     gen_provider_name = "local"  # stills assembly unless motion mode says otherwise
+    credits = None
+    if credits_enabled:
+        meta = works.read_work_metadata(series["id"])
+        credits = Credits(
+            title=title,
+            source=series["source"],
+            chapter_label=f"Chapter {chapter_num:g}",
+            author=meta.author if meta is not None else None,
+        )
     if out_path.exists():
         log("Stage 4/4 assembly: cached")
         duration = sum(s.duration_s + s.pause_after_s for s in segments)
+        if state.get("credits"):
+            duration += CREDITS_SECONDS
     else:
         if mode == "cards":
             render_paths = _card_paths(workdir, len(segments))
@@ -691,13 +707,15 @@ def build_video(
                     clips.append(clip)
                     log(f"  segment {seg.index:02d}: generated"
                         f" ({seg.duration_s:.1f}s)")
-                out_path, duration = mux_clips(segments, clips, workdir, log)
+                out_path, duration = mux_clips(segments, clips, workdir, log,
+                                               credits=credits)
             else:
                 log(f"Stage 4/4 assembly: provider {gen.name} makes stills,"
                     " not video — rendering with the stills assembly...")
                 out_path, duration = assemble(
                     segments, render_paths, workdir,
                     _parse_resolution(config.video.resolution), log,
+                    credits=credits,
                 )
         elif mode == "animate":
             animator = get_frame_animator(config.frames.provider, config)
@@ -713,6 +731,7 @@ def build_video(
                 segments, render_paths, workdir,
                 _parse_resolution(config.video.resolution), log,
                 frame_animator=animator,
+                credits=credits,
             )
         elif mode == "sequence":
             animator = get_frame_animator(config.sequence.provider, config)
@@ -746,11 +765,13 @@ def build_video(
                 frame_animator=animator,
                 sequence_interp_fps=config.sequence.interp_fps,
                 sequence_critic=critic,
+                credits=credits,
             )
         else:
             out_path, duration = assemble(
                 segments, render_paths, workdir,
                 _parse_resolution(config.video.resolution), log,
+                credits=credits,
             )
         state = dict(wanted)
         state_path.write_text(json.dumps(state))

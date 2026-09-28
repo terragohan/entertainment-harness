@@ -119,7 +119,7 @@ def harness(tmp_path, monkeypatch):
     assembled: list[dict] = []
 
     def fake_assemble(segments, page_paths, workdir, resolution, log,
-                      min_page_seconds=2.5):
+                      min_page_seconds=2.5, credits=None):
         assembled.append(
             {"n": len(segments), "resolution": resolution,
              "min_page_seconds": min_page_seconds, "pages": list(page_paths)}
@@ -186,7 +186,7 @@ def test_build_short_end_to_end_and_cached(harness):
     assert row["from_chapter"] is None and row["to_chapter"] is None
     assert row["duration_s"] == pytest.approx(1.0)
     state = json.loads((out.parent / "render_state.json").read_text())
-    assert state == {"format": "tiktok", "video_gen": "local"}
+    assert state == {"format": "tiktok", "video_gen": "local", "credits": True}
 
     # second run: everything cached
     out2 = short.build_short(conn, series, Config(), profile, log=lambda m: None)
@@ -293,7 +293,7 @@ def test_build_short_with_runway_provider(harness, monkeypatch, tmp_path):
 
     muxed: dict = {}
 
-    def fake_mux_clips(segments, clips, workdir, log):
+    def fake_mux_clips(segments, clips, workdir, log, credits=None):
         out = workdir / "out.mp4"
         out.write_bytes(b"muxed-runway")
         muxed["clips"] = clips

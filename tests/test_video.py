@@ -451,7 +451,7 @@ def _capture_clips(monkeypatch):
                       "motion": motion, "dest": dest})
         dest.write_bytes(b"clip")
 
-    def fake_mux(segments, clips, workdir, log=lambda m: None):
+    def fake_mux(segments, clips, workdir, log=lambda m: None, credits=None):
         out = workdir / "out.mp4"
         out.write_bytes(b"out")
         return out, sum(s.duration_s + s.pause_after_s for s in segments)
@@ -724,7 +724,7 @@ def harness(tmp_path, monkeypatch):
 
     def fake_assemble(segments, page_paths, workdir, resolution, log,
                       frame_animator=None, sequence_interp_fps=30,
-                      sequence_critic=None):
+                      sequence_critic=None, credits=None):
         assembled.append(len(segments))
         out = workdir / "out.mp4"
         out.write_bytes(b"fake-mp4")
@@ -787,7 +787,8 @@ def test_build_video_slideshow_mode_stamps_motion(harness, monkeypatch):
     conn, series, chapter, profile, *_ = harness
     seen: dict = {}
 
-    def recording_assemble(segments, page_paths, workdir, resolution, log):
+    def recording_assemble(segments, page_paths, workdir, resolution, log,
+                           credits=None):
         seen["motions"] = [s.motion for s in segments]
         out = workdir / "out.mp4"
         out.write_bytes(b"fake-mp4")
@@ -814,7 +815,7 @@ def _make_book(conn):
 
 
 def _recording_assemble(monkeypatch, seen: dict):
-    def recording(segments, page_paths, workdir, resolution, log):
+    def recording(segments, page_paths, workdir, resolution, log, credits=None):
         seen["paths"] = list(page_paths)
         seen["pages"] = [list(s.pages) for s in segments]
         out = workdir / "out.mp4"
@@ -904,7 +905,7 @@ def test_build_video_panels_mode_grounds_and_stamps(harness, monkeypatch):
     monkeypatch.setattr(pipeline, "ground_segments", fake_ground)
     seen: dict = {}
 
-    def capture(segments, page_paths, workdir, resolution, log):
+    def capture(segments, page_paths, workdir, resolution, log, credits=None):
         seen["motions"] = [s.motion for s in segments]
         seen["regions"] = [s.regions for s in segments]
         out = workdir / "out.mp4"
@@ -950,7 +951,7 @@ def test_build_video_motion_mode_uses_animated_provider(harness, monkeypatch):
     monkeypatch.setattr(pipeline, "video_duration", lambda path: 1.5)
     muxed: dict = {}
 
-    def fake_mux(segments, clips, workdir, log=lambda m: None):
+    def fake_mux(segments, clips, workdir, log=lambda m: None, credits=None):
         muxed["durations"] = [s.duration_s for s in segments]
         muxed["clips"] = list(clips)
         out = workdir / "out.mp4"
@@ -1075,7 +1076,7 @@ def test_build_video_animate_mode_grounds_and_passes_animator(
     seen: dict = {}
 
     def capture(segments, page_paths, workdir, resolution, log,
-                frame_animator=None):
+                frame_animator=None, credits=None):
         seen["motions"] = [s.motion for s in segments]
         seen["animator"] = frame_animator
         out = workdir / "out.mp4"
@@ -1305,7 +1306,7 @@ def _fake_ground(adapter, model, segments, page_paths, series_id,
 def _sequence_capture(seen):
     def capture(segments, page_paths, workdir, resolution, log,
                 frame_animator=None, sequence_interp_fps=30,
-                sequence_critic=None):
+                sequence_critic=None, credits=None):
         seen["motions"] = [s.motion for s in segments]
         seen["animator"] = frame_animator
         seen["interp_fps"] = sequence_interp_fps
@@ -1475,7 +1476,8 @@ def test_build_video_colorize_uses_colorized_pages(harness, monkeypatch):
     _fake_colorizer(monkeypatch)
     seen: list[list[Path]] = []
 
-    def recording_assemble(segments, page_paths, workdir, resolution, log):
+    def recording_assemble(segments, page_paths, workdir, resolution, log,
+                           credits=None):
         seen.append(list(page_paths))
         out = workdir / "out.mp4"
         out.write_bytes(b"fake-mp4")
@@ -1496,7 +1498,7 @@ def test_build_video_colorize_uses_colorized_pages(harness, monkeypatch):
     state = json.loads((workdir / "render_state.json").read_text())
     assert state == {"colorize": True, "translated": False, "mode": "kenburns",
                      "detail": "standard", "pacing": pipeline.PACING_VERSION,
-                     "panel_first": False}
+                     "panel_first": False, "credits": True}
 
 
 def test_colorize_toggle_triggers_rerender(harness, monkeypatch):
@@ -1504,7 +1506,8 @@ def test_colorize_toggle_triggers_rerender(harness, monkeypatch):
     _fake_colorizer(monkeypatch)
     renders: list[list[Path]] = []
 
-    def recording_assemble(segments, page_paths, workdir, resolution, log):
+    def recording_assemble(segments, page_paths, workdir, resolution, log,
+                           credits=None):
         renders.append(list(page_paths))
         out = workdir / "out.mp4"
         out.write_bytes(b"fake-mp4")
@@ -1552,7 +1555,8 @@ def test_build_video_translated_uses_translated_pages(harness, monkeypatch):
     _make_translated_pages(harness)
     seen: list[list[Path]] = []
 
-    def recording_assemble(segments, page_paths, workdir, resolution, log):
+    def recording_assemble(segments, page_paths, workdir, resolution, log,
+                           credits=None):
         seen.append(list(page_paths))
         out = workdir / "out.mp4"
         out.write_bytes(b"fake-mp4")
@@ -1570,14 +1574,15 @@ def test_build_video_translated_uses_translated_pages(harness, monkeypatch):
     state = json.loads((workdir / "render_state.json").read_text())
     assert state == {"colorize": False, "translated": True, "mode": "kenburns",
                      "detail": "standard", "pacing": pipeline.PACING_VERSION,
-                     "panel_first": False}
+                     "panel_first": False, "credits": True}
 
 
 def test_translated_toggle_triggers_rerender(harness, monkeypatch):
     conn, series, chapter, profile, *_ = harness
     renders = 0
 
-    def counting_assemble(segments, page_paths, workdir, resolution, log):
+    def counting_assemble(segments, page_paths, workdir, resolution, log,
+                          credits=None):
         nonlocal renders
         renders += 1
         out = workdir / "out.mp4"
@@ -1650,7 +1655,8 @@ def test_build_video_scroll_mode_sets_motions_and_state(harness, monkeypatch):
     conn, series, chapter, profile, *_ = harness
     seen: list[list[str]] = []
 
-    def recording_assemble(segments, page_paths, workdir, resolution, log):
+    def recording_assemble(segments, page_paths, workdir, resolution, log,
+                           credits=None):
         seen.append([s.motion for s in segments])
         out = workdir / "out.mp4"
         out.write_bytes(b"fake-mp4")
@@ -1668,14 +1674,15 @@ def test_build_video_scroll_mode_sets_motions_and_state(harness, monkeypatch):
     state = json.loads((workdir / "render_state.json").read_text())
     assert state == {"colorize": False, "translated": False, "mode": "scroll",
                      "detail": "standard", "pacing": pipeline.PACING_VERSION,
-                     "grounded": True, "panel_first": False}
+                     "grounded": True, "panel_first": False, "credits": True}
 
 
 def test_build_video_mode_config_default_applies(harness, monkeypatch):
     conn, series, chapter, profile, *_ = harness
     seen: list[list[str]] = []
 
-    def recording_assemble(segments, page_paths, workdir, resolution, log):
+    def recording_assemble(segments, page_paths, workdir, resolution, log,
+                           credits=None):
         seen.append([s.motion for s in segments])
         out = workdir / "out.mp4"
         out.write_bytes(b"fake-mp4")
@@ -1696,7 +1703,8 @@ def test_mode_toggle_triggers_rerender_and_restamps_motions(harness, monkeypatch
     conn, series, chapter, profile, *_ = harness
     renders: list[list[str]] = []
 
-    def recording_assemble(segments, page_paths, workdir, resolution, log):
+    def recording_assemble(segments, page_paths, workdir, resolution, log,
+                           credits=None):
         renders.append([s.motion for s in segments])
         out = workdir / "out.mp4"
         out.write_bytes(b"fake-mp4")
@@ -2382,7 +2390,7 @@ def test_assemble_scroll_grounded_segment_renders_hold_glide(tmp_path, monkeypat
         captured.update(strip=strip, duration=duration, keyframes=keyframes)
         dest.write_bytes(b"clip")
 
-    def fake_mux(segments, clips, workdir, log=lambda m: None):
+    def fake_mux(segments, clips, workdir, log=lambda m: None, credits=None):
         out = workdir / "out.mp4"
         out.write_bytes(b"out")
         return out, 0.0
@@ -2526,3 +2534,56 @@ def test_build_video_kenburns_skips_grounding(harness):
     assert not (works.chapter_dir("s1", "ch-1") / "grounding.json").exists()
     script_segs, _ = load_script(workdir / "script.json")
     assert all(s.regions == [] for s in script_segs)
+
+
+def test_build_video_passes_credits_with_work_attribution(harness, monkeypatch):
+    """The chapter pipeline hands assemble() a Credits built from the work's
+    metadata; the harness fixture has no work.json, so author stays None."""
+    conn, series, chapter, profile, *_ = harness
+    seen: dict = {}
+
+    def capture(segments, page_paths, workdir, resolution, log, credits=None):
+        seen["credits"] = credits
+        out = workdir / "out.mp4"
+        out.write_bytes(b"fake-mp4")
+        return out, 1.0
+
+    monkeypatch.setattr(pipeline, "assemble", capture)
+    pipeline.build_video(
+        conn, series, chapter, _artifact_config(), profile,
+        client=FakeClient(), log=lambda m: None,
+    )
+    credits = seen["credits"]
+    assert credits is not None
+    assert credits.title == "Test Manga"
+    assert credits.source == "mangadex"
+    assert credits.chapter_label == "Chapter 1"
+    assert credits.author is None
+
+
+def test_build_video_credits_off_passes_none_and_records_state(
+    harness, monkeypatch
+):
+    conn, series, chapter, profile, *_ = harness
+    seen: dict = {}
+
+    def capture(segments, page_paths, workdir, resolution, log, credits=None):
+        seen["credits"] = credits
+        out = workdir / "out.mp4"
+        out.write_bytes(b"fake-mp4")
+        return out, 1.0
+
+    monkeypatch.setattr(pipeline, "assemble", capture)
+    config = _artifact_config()
+    config.video.credits = False
+    pipeline.build_video(
+        conn, series, chapter, config, profile,
+        client=FakeClient(), log=lambda m: None,
+    )
+    assert seen["credits"] is None
+    import json
+
+    state = json.loads(
+        (works.video_recap_dir("s1", "ch-1") / "render_state.json").read_text()
+    )
+    assert state["credits"] is False

@@ -305,13 +305,15 @@ and recordings:
   (your own work, public-domain or openly licensed comics, works whose
   rightsholders permit it), or short excerpts with your own genuine
   commentary and criticism.
-- **If you do share**: credit the original work's author and publisher,
-  link to where the official release can be bought or read, and honor any
+- **If you do share, attribution is required** — for both the source
+  material and the tool. Credit the original work's title and author (and
+  the scanlation or translation group, if the pages came from one), link to
+  the official release when one exists, and note that the video was "Made
+  with Entertainment Harness (https://terragohan.com)". Every rendered
+  video ends with a credits card carrying exactly this attribution — keep
+  it on anything you share, and don't trim or crop it out. Copy-paste
+  templates and per-platform notes: **[SHARING.md](SHARING.md)**. Honor any
   takedown request promptly.
-- **Attribution request (not a license condition)**: if you share content
-  made with Entertainment Harness, please note that it was
-  "Made with Entertainment Harness (https://terragohan.com)" — it helps
-  others find the tool.
 
 Respect scanlation and fan-translation communities' norms as well: many
 groups ask that their work not be re-hosted or monetized.
@@ -369,6 +371,11 @@ cd ui && bun install && bun run typecheck && bun run smoke
 
 Because of the Commons Clause this project is intentionally **not** OSI
 "open source" — "source-available" is the honest label.
+
+**Sharing generated content** is governed by [SHARING.md](SHARING.md):
+attribution for both the source material (work + author) and the tool is
+required on anything you share, and every render carries a credits end card
+by default to make that automatic.
 
 Third-party model weights (Kokoro, DDColor, SAM, Qwen, LFM) download at
 runtime from their upstream sources and are licensed by their respective
