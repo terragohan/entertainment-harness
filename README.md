@@ -111,8 +111,12 @@ phases and verifiable gates.
 - Video presentation — Ken Burns, scroll mode, anchored panel-first pacing, four extra styles ([video-mode](docs/initiatives/video-mode/), [anchored-scroll](docs/initiatives/anchored-scroll/), [video-styles](docs/initiatives/video-styles/))
 - Character bible — per-work cast registry injected into recap prompts ([character-bible](docs/initiatives/character-bible/))
 - AI animation modes — `animate` (frames per beat) and `sequence` (frame-by-frame chains) ([panel-animation](docs/initiatives/panel-animation/), [frame-sequence](docs/initiatives/frame-sequence/))
-- Manga → anime scenes via Runway ([manga-to-anime-scene](docs/initiatives/manga-to-anime-scene/))
 - Plugin system — providers as data, conformance-checked ([plugin-extensibility](docs/initiatives/plugin-extensibility/))
+
+**In development**
+
+- **Manga → anime** — a guided storyboard pipeline: keyframes generated from your panels, assembled into short 16:9 clips ([manga-to-anime-scene](docs/initiatives/manga-to-anime-scene/))
+- **Custom sources** — a plugin API for content sources beyond the built-in MangaDex and Weeb Central catalogs
 
 **Up next**
 
