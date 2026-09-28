@@ -12,8 +12,4 @@ wheels/
 # Desktop UI (ui/)
 ui/node_modules/
 ui/build/
-ui/artifacts/
 ui/.dev-data/
-# PyInstaller staging for the Electrobun build (packaging/build and
-# packaging/dist are covered by the build/ and dist/ patterns above)
-ui/resources/

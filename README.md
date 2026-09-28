@@ -168,9 +168,7 @@ bun run dev        # builds and launches the app against your real data dir
 ```
 
 The app runs from the checkout: it spawns `uv run eh serve` from the repo
-and connects to it. Building a self-contained `EntertainmentHarness.app`
-(embeds a frozen backend, no repo needed at runtime) is a maintainer flow —
-see [`ui/README.md`](ui/README.md) if you need it.
+and connects to it.
 
 ## Configuration
 
