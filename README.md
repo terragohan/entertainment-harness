@@ -21,20 +21,24 @@ app for macOS (Apple silicon).
 
 ## Demo
 
-Everything below was generated from **synthetic demo content** (abstract
+A **Kenja no Mago** chapter 0 recap, generated end-to-end by the pipeline:
+vision-model recap → Kokoro TTS narration → Ken Burns motion over the real
+pages. Click the preview for the full clip (with narration):
+
+<p align="center">
+  <a href="https://github.com/terragohan/entertainment-harness/blob/main/assets/demo/kenja-no-mago-ch0.mp4">
+    <img src="assets/demo/kenja-no-mago-ch0.webp" width="720" alt="Generated recap video of Kenja no Mago chapter 0 — narration over the chapter's pages with Ken Burns motion">
+  </a>
+</p>
+
+<p align="center">
+  <em>Source manga: <strong>Kenja no Mago</strong> — story by Tsuyoshi Yoshioka, art by Seiji Kikuchi.</em>
+</p>
+
+The desktop app below is shown with a **synthetic demo library** (abstract
 comic pages, fictional titles) produced by
 [`scripts/seed_demo.py`](scripts/seed_demo.py) — no real manga is bundled
-with this repository.
-
-<p align="center">
-  <img src="assets/demo/neon-koi-recap.gif" width="720" alt="Generated recap video — Kokoro TTS narration over the chapter's pages with Ken Burns motion">
-</p>
-
-<p align="center">
-  <em>A chapter recap video: vision-model recap → Kokoro TTS → Ken Burns over the real pages.</em>
-</p>
-
-The desktop app — library browsing, per-work processing, playback, settings:
+with this repository:
 
 <p align="center">
   <img src="site/assets/screenshots/library.png" width="720" alt="Library view">
