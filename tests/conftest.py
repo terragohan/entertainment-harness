@@ -20,6 +20,12 @@ import pytest
 # terminal before any test module imports the package.
 os.environ["COLUMNS"] = "200"
 
+# Typer forces terminal/color output when GITHUB_ACTIONS is set (its
+# rich_utils FORCE_TERMINAL), which splits flag names across styled spans
+# ('-\x1b[0m\x1b[1;36m-thinking') and breaks plain-text help assertions.
+# This must be set before typer.rich_utils is imported.
+os.environ["_TYPER_FORCE_DISABLE_TERMINAL"] = "1"
+
 from entertainment_harness import db
 from entertainment_harness.pipelines import recap as recap_mod
 from entertainment_harness.hardware import HardwareProfile
