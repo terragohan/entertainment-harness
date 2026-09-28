@@ -27,7 +27,7 @@ jobs:
 
       - name: DEBUG help output
         run: |
-          uv run python -c "import sys, typer, rich, click; print('py', sys.version); print('typer', typer.__version__); print('rich', rich.__version__); print('click', click.__version__)"
+          uv run python -c "import sys, typer, click, importlib.metadata as m; print('py', sys.version); print('typer', typer.__version__); print('rich', m.version('rich')); print('click', click.__version__)"
           uv run python -c "
           import os
           print('COLUMNS=', os.environ.get('COLUMNS'), 'TERM=', os.environ.get('TERM'), 'LANG=', os.environ.get('LANG'))
