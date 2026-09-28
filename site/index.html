@@ -115,6 +115,11 @@ uv run eh add "One Piece"       # search a source, add the series
 uv run eh sync                  # fetch its chapter list
 uv run eh recap "One Piece" --video --chapters 1
 uv run eh play "One Piece"      # watch the generated recap video</code></pre>
+      <p>The desktop app (macOS, Apple silicon) runs from the same checkout —
+         it also needs <a href="https://bun.sh">Bun</a>:</p>
+      <pre><code>cd ui
+bun install
+bun run dev   # builds and launches the app against your data dir</code></pre>
       <p>The default model backend is <a href="https://ollama.com">Ollama</a>; remote
          backends like OpenRouter are configured in
          <code>~/.local/share/entertainment-harness/config.toml</code>.
