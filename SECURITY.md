@@ -2,10 +2,11 @@
 
 ## Reporting a vulnerability
 
-Please report security issues privately to **abraham@elmahrek.com** rather
-than opening a public issue. Include a description, reproduction steps, and
-the affected version/commit. You'll get an acknowledgement within a few
-days.
+Please report security issues privately through [GitHub's private
+vulnerability reporting](https://github.com/terragohan/entertainment-harness/security/advisories/new)
+rather than opening a public issue. Include a description, reproduction
+steps, and the affected version/commit. You'll get an acknowledgement
+within a few days.
 
 ## Scope notes
 

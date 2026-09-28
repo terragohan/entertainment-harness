@@ -11,7 +11,7 @@ v3.0 only** (see [LICENSE](LICENSE)), subject to the additional condition below.
   derives substantially from it (including paid hosting of it), without the
   licensor's permission.
 - In short: free to use and share with attribution; commercial resale or hosting
-  needs a separate agreement. Contact: abraham@elmahrek.com.
+  needs a separate agreement. Contact: Terra Gohan — <https://terragohan.com>.
 
 Because of this additional condition, the project is **source-available**, not
 "open source" as defined by the Open Source Initiative.
@@ -35,6 +35,6 @@ Commons Clause License Condition notice.
 
 - Software: entertainment-harness
 - License: GPL-3.0
-- Licensor: Abraham Elmahrek
+- Licensor: Terra Gohan
 
 Full text and FAQ: <https://commonsclause.com>
