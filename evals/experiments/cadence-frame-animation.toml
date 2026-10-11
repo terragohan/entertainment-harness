@@ -1,0 +1,47 @@
+# Cadence x critic sweep for the frame-animation loop (panel outpainted to
+# video size, then frames chained off each other). fps is the generation
+# cadence; critic toggles the vision drift check (one regeneration per
+# drifting frame, then truncation). One panel keeps the sweep affordable
+# — a critic arm can cost up to 2x its frame count.
+#
+# NOTE: interp_fps is assembly-only — it never changes the generated
+# frames, just preview-clip playback smoothness (--clips).
+#
+#   uv run python -m evals.imagegen run evals/experiments/cadence-frame-animation.toml
+
+name = "cadence-frame-animation"
+mode = "frame-animation"
+duration = 4.0
+panels = ["samples/kenja-ch0/page-07.jpg"]
+context = "Kenja no Mago chapter 0: rain begins over a mountain valley as a hooded stranger approaches; in town, a young man freezes, sensing imminent danger."
+judge = true
+
+[[arms]]
+name = "fps0.75-critic"   # 3 frames
+fps = 0.75
+critic = true
+
+[[arms]]
+name = "fps0.75-nocritic"
+fps = 0.75
+critic = false
+
+[[arms]]
+name = "fps1.5-critic"    # the product default cadence: 6 frames
+fps = 1.5
+critic = true
+
+[[arms]]
+name = "fps1.5-nocritic"
+fps = 1.5
+critic = false
+
+[[arms]]
+name = "fps3-critic"      # dense: 12 frames (the cap)
+fps = 3.0
+critic = true
+
+[[arms]]
+name = "fps3-nocritic"
+fps = 3.0
+critic = false

@@ -32,3 +32,6 @@ Tracked multi-phase work, one directory per initiative (each holding its `README
 | [panel-animation](panel-animation/) — `animate` video mode (AI-generated frames per beat) | done | — |
 | [frame-sequence](frame-sequence/) — frame-by-frame panel animation video mode (`sequence`) | done | panel-animation |
 | [plugin-extensibility](plugin-extensibility/) — capabilities as data, specific roles, zero-core-edit plugins | done | — |
+| [animation-conductor](animation-conductor/) — deterministic timeline-driven animation runtime (sparse timeline -> sequencer -> compositor -> ffmpeg) | done | — |
+| [frame-gen-evals](frame-gen-evals/) — TOML-declared experiments over animated-frame image generation (models × cadence × critic) with judged galleries | done | panel-animation, frame-sequence |
+| [animation-director](animation-director/) — instruct+assess loop: per-model instruction bank, judge-driven revise, trajectories toward a trained director | **active** | frame-gen-evals |

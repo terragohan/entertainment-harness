@@ -37,7 +37,7 @@ class MyEngine:
 - Declare `capabilities` as data so the system can answer "who can generate
   images?" (`PluginRegistry.names_with("image-gen")`) and validate role
   bindings. Strings in use today: `tts`, `voice-clone`, `stills`,
-  `image-to-video`, `image-gen`, `frame-sequence`, `vision`.
+  `image-to-video`, `image-gen`, `frame-animation`, `vision`.
 - Unknown plugin names raise `PluginError` (a `ValueError` subclass) listing
   the available plugins. Raise the seam's own error type for runtime
   failures (`VideoError` for tts/video_gen/frames, `ModelError` for
@@ -55,9 +55,10 @@ Category-specific members (also enforced by the conformance kit):
 - `video_gen`: `animated: bool` (False = stills/Ken Burns fallback),
   `generate_segment(image, segment, duration, workdir)`.
 - `frames`: `animated: bool`, `generate_frames(image, segment, duration, workdir)`.
-  When assembled as the `[sequence] provider` (sequence video mode), the call
+  When assembled as the `[frame_animation] provider` (frame-animation video
+  mode), the call
   also passes `critic=` — a drift-critic hook the animator may call per
-  generated frame — so sequence-capable animators should accept that kwarg.
+  generated frame — so chain-capable animators should accept that kwarg.
 - `colorize`: `colorize_page(src, dest)`, `colorize_pages(pages, dest_dir, log)`.
 - `search`: `search(query, max_results=10)`.
 

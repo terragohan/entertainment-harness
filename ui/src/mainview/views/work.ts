@@ -10,6 +10,7 @@ import {
 } from "../api";
 import { sendBackgroundMode, sendExportRequest, onExportDone } from "../bridge";
 import { clear, el } from "../dom";
+import { searchSelect } from "../searchselect";
 import { fmtChapterNum, fmtDuration, getWork, loadLibrary, markChapterPlayable } from "../store";
 
 /** Recap grains; mirrors DETAIL_LEVELS in pipelines/recap.py. */
@@ -23,9 +24,22 @@ const VIDEO_MODES = [
 	"cards",
 	"panels",
 	"motion",
-	"animate",
-	"sequence",
+	"video-animation",
+	"frame-animation",
 ] as const;
+
+/** What each presentation style means — one line per mode, shown as the
+ * style picker's described options (mirrors docs/design.md's mode list). */
+const VIDEO_MODE_INFO: Record<string, string> = {
+	kenburns: "Classic pans and zooms across each still page.",
+	scroll: "One clip per beat, descending a stacked strip of its pages.",
+	slideshow: "Still pages dissolving into each other within each beat.",
+	cards: "Caption cards over a blurred cover — the only style that works for books.",
+	panels: "Zooms into each beat's grounded manga panel.",
+	motion: "AI video clips per beat, generated from the beat's first page.",
+	"video-animation": "AI-animated frames of each panel, stitched with crossfades.",
+	"frame-animation": "Panel expanded to video size, then AI frames chained into motion.",
+};
 
 /** Default steering direction, pre-filled into the work's instruction box
  * and sent with every run unless the user edits or clears it for that
@@ -335,37 +349,25 @@ export async function renderWork(
 			el("option", { value: d, selected: d === defaultDetail }, d),
 		),
 	) as HTMLSelectElement;
-	// Video presentation for the run (same as `eh recap --video-mode`).
+	// Video presentation for the run (same as `eh recap --video-mode`), as a
+	// search-select: each style gets a one-line description, searchable.
 	// Books have no pages: the backend only accepts cards there and
-	// auto-defaults to it, so the select pre-selects cards for them.
+	// auto-defaults to it, so the picker pre-selects cards for them.
 	// Stored with the toggle like detail.
-	const videoModeSelect = el(
-		"select",
-		{
-			class: "video-mode-select",
-			title:
-				"Video style — kenburns pans/zooms each page, scroll descends a stacked strip, " +
-				"slideshow dissolves between still pages, cards shows caption cards (books), " +
-				"panels zooms into each beat's panel, motion generates clips with the video-gen provider, " +
-				"animate stitches AI-generated frames of each panel (uses [frames] provider), " +
-				"sequence expands each panel to video size and chains AI frames into motion " +
-				"(uses [sequence] provider)",
-		},
-		...VIDEO_MODES.map((m) =>
-			el(
-				"option",
-				{
-					value: m,
-					selected:
-						m ===
-						(work.kind === "book" && defaultVideoMode === "kenburns"
-							? "cards"
-							: defaultVideoMode),
-				},
-				m,
-			),
-		),
-	) as HTMLSelectElement;
+	const initialVideoMode =
+		work.kind === "book" && defaultVideoMode === "kenburns"
+			? "cards"
+			: defaultVideoMode;
+	const videoModeSelect = searchSelect({
+		className: "video-mode-select",
+		items: VIDEO_MODES.map((m) => ({
+			value: m,
+			label: m,
+			description: VIDEO_MODE_INFO[m] ?? "",
+		})),
+		value: initialVideoMode,
+		placeholder: "Search styles…",
+	});
 	// Optional scope for the toggle: both boxes empty (and "all" off) =
 	// the default pending selection — from the read mark onward, gaps
 	// behind it filled in. A range (one box alone = a single chapter)
@@ -561,7 +563,7 @@ export async function renderWork(
 				el("span", { class: "muted" }, "detail"),
 				detailSelect,
 				el("span", { class: "muted" }, "style"),
-				videoModeSelect,
+				videoModeSelect.root,
 				el("span", { class: "muted" }, "chapters"),
 				fromInput,
 				el("span", { class: "muted" }, "–"),

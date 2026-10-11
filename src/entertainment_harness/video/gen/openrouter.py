@@ -10,7 +10,7 @@ requested ratio — so chained frames share exact dimensions for ffmpeg.
 Credentials come from ``[models.openai_compat]`` with the same env
 fallbacks as the text/vision backend (OPENAI_COMPAT_API_KEY /
 OPENROUTER_API_KEY). The interface mirrors RunwayProvider.text_to_image
-so the frames/sequence animators duck-type either client.
+so the frames/chain animators duck-type either client.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from PIL import Image
 from entertainment_harness.config import Config
 from entertainment_harness.video.script import VideoConfigError, VideoError
 
-#: Fallback image model when [frames]/[sequence] model is empty. Any
+#: Fallback image model when [frames]/[frame_animation] model is empty. Any
 #: OpenRouter image-generation model id works (one whose architecture has
 #: "image" in its output modalities, e.g. "openai/gpt-5-image").
 DEFAULT_IMAGE_MODEL = "google/gemini-2.5-flash-image"
@@ -124,7 +124,8 @@ class OpenRouterImageProvider:
                 f"{model!r} cannot generate images at {self.base_url} — the"
                 " endpoint has no image-output route for it (a model can"
                 " accept image input without being able to draw; check the"
-                " model's output modalities). Set [frames]/[sequence] model"
+                " model's output modalities). Set [frames]/[frame_animation]"
+                " model"
                 f" to an image model, e.g. {DEFAULT_IMAGE_MODEL!r} or"
                 " \"openai/gpt-5-image\" — or blank for the default."
             )

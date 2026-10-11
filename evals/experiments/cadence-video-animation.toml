@@ -1,0 +1,29 @@
+# Cadence sweep for the video-animation loop: seconds_per_frame x max_frames
+# on one provider/model, so the only variable is how many motion-phase
+# frames a 6 s slot gets. The cadence question: higher frame counts risk
+# stagnation (motion never advances), lower ones risk drift (each frame
+# invents too much) — the judge's motion and drift dimensions measure it.
+#
+#   uv run python -m evals.imagegen run evals/experiments/cadence-video-animation.toml
+
+name = "cadence-video-animation"
+mode = "video-animation"
+duration = 6.0
+panels = ["samples/kenja-ch0/page-07.jpg", "samples/kenja-ch0/page-09.jpg"]
+context = "Kenja no Mago chapter 0: rain begins over a mountain valley as a hooded stranger approaches; in town, a young man freezes, sensing imminent danger."
+judge = true
+
+[[arms]]
+name = "spf1-max8"        # dense: 6 frames per panel
+seconds_per_frame = 1.0
+max_frames = 8
+
+[[arms]]
+name = "spf2-max6"        # the product defaults: 3 frames
+seconds_per_frame = 2.0
+max_frames = 6
+
+[[arms]]
+name = "spf3-max4"        # sparse: 2 frames
+seconds_per_frame = 3.0
+max_frames = 4

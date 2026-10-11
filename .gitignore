@@ -13,3 +13,6 @@ wheels/
 ui/node_modules/
 ui/build/
 ui/.dev-data/
+
+# Eval run artifacts (evals/)
+evals/runs/

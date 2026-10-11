@@ -182,12 +182,12 @@ def test_resolve_image_model_tracks_defaults_and_explicit_values():
     from entertainment_harness.video.gen.openrouter import DEFAULT_IMAGE_MODEL
 
     assert resolve_image_model("runway", "") == "gen4_image"
-    assert resolve_image_model("sequence", "") == "gen4_image"
+    assert resolve_image_model("frame-animation", "") == "gen4_image"
     assert resolve_image_model("openrouter", "") == DEFAULT_IMAGE_MODEL
-    assert resolve_image_model("openrouter-sequence", "") == DEFAULT_IMAGE_MODEL
-    # an explicit [frames]/[sequence] model always wins
-    assert resolve_image_model("openrouter-sequence", "x/y") == "x/y"
-    assert resolve_image_model("sequence", "gen4_image_turbo") == "gen4_image_turbo"
+    assert resolve_image_model("openrouter-frame-animation", "") == DEFAULT_IMAGE_MODEL
+    # an explicit [frames]/[frame_animation] model always wins
+    assert resolve_image_model("openrouter-frame-animation", "x/y") == "x/y"
+    assert resolve_image_model("frame-animation", "gen4_image_turbo") == "gen4_image_turbo"
     # third-party providers key on the raw config value
     assert resolve_image_model("third-party", "") == ""
     assert resolve_image_model("local", "") == ""

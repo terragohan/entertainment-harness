@@ -1019,7 +1019,7 @@ def test_assemble_animate_stitches_generated_frames(tmp_path, monkeypatch):
     animator = FakeFrameAnimator()
     page_paths = _three_pages(tmp_path)
     seg = Segment(
-        index=0, text="x", pages=[1, 2], motion="animate", duration_s=8.0,
+        index=0, text="x", pages=[1, 2], motion="video-animation", duration_s=8.0,
         regions=[
             {"page": 1, "kind": "hold", "box": [0.0, 0.0, 0.5, 0.5]},
             {"page": 2, "kind": "pan"},
@@ -1048,7 +1048,7 @@ def test_assemble_animate_stills_animator_falls_back_to_panels(
 
     page_paths = _three_pages(tmp_path)
     seg = Segment(
-        index=0, text="x", pages=[1], motion="animate", duration_s=4.0,
+        index=0, text="x", pages=[1], motion="video-animation", duration_s=4.0,
         regions=[{"page": 1, "kind": "hold", "box": [0.0, 0.0, 0.5, 0.5]}],
     )
     workdir = tmp_path / "work"
@@ -1088,16 +1088,16 @@ def test_build_video_animate_mode_grounds_and_passes_animator(
     config.frames.provider = "fake-frames"
     pipeline.build_video(
         conn, series, chapter, config, profile,
-        client=FakeClient(), log=lambda m: None, video_mode="animate",
+        client=FakeClient(), log=lambda m: None, video_mode="video-animation",
     )
-    assert seen["motions"] == ["animate", "animate"]
+    assert seen["motions"] == ["video-animation", "video-animation"]
     assert seen["animator"] is animator
     import json
     state = json.loads(
         (works.video_dir_for_kind("s1", "ch-1", "recap") / "render_state.json")
         .read_text()
     )
-    assert state["mode"] == "animate"
+    assert state["mode"] == "video-animation"
     assert state["grounded"] is True
     assert state["frames"] == "fake-frames:"
     meta = works.read_video_metadata("s1", "ch-1", "recap")
@@ -1110,7 +1110,7 @@ def test_build_video_animate_local_provider_renders_as_panels(harness):
     # [frames] provider defaults to "local" — no image generator configured
     pipeline.build_video(
         conn, series, chapter, _artifact_config(), profile,
-        client=FakeClient(), log=logs.append, video_mode="animate",
+        client=FakeClient(), log=logs.append, video_mode="video-animation",
     )
     assert any("generates no frames" in m for m in logs)
 
@@ -1142,7 +1142,7 @@ def test_assemble_sequence_stitches_generated_frames(tmp_path, monkeypatch):
     animator = FakeSequenceAnimator()
     page_paths = _three_pages(tmp_path)
     seg = Segment(
-        index=0, text="x", pages=[1, 2], motion="sequence", duration_s=8.0,
+        index=0, text="x", pages=[1, 2], motion="frame-animation", duration_s=8.0,
         regions=[
             {"page": 1, "kind": "hold", "box": [0.0, 0.0, 0.5, 0.5]},
             {"page": 2, "kind": "pan"},
@@ -1174,7 +1174,7 @@ def test_assemble_sequence_stills_animator_falls_back_to_panels(
 
     page_paths = _three_pages(tmp_path)
     seg = Segment(
-        index=0, text="x", pages=[1], motion="sequence", duration_s=4.0,
+        index=0, text="x", pages=[1], motion="frame-animation", duration_s=4.0,
         regions=[{"page": 1, "kind": "hold", "box": [0.0, 0.0, 0.5, 0.5]}],
     )
     workdir = tmp_path / "work"
@@ -1197,7 +1197,7 @@ def test_assemble_sequence_generation_failure_falls_back_to_panels(
 
     page_paths = _three_pages(tmp_path)
     seg = Segment(
-        index=0, text="x", pages=[1], motion="sequence", duration_s=4.0,
+        index=0, text="x", pages=[1], motion="frame-animation", duration_s=4.0,
         regions=[{"page": 1, "kind": "hold", "box": [0.0, 0.0, 0.5, 0.5]}],
     )
     workdir = tmp_path / "work"
@@ -1222,7 +1222,7 @@ def test_assemble_animate_generation_failure_falls_back_to_panels(
 
     page_paths = _three_pages(tmp_path)
     seg = Segment(
-        index=0, text="x", pages=[1], motion="animate", duration_s=4.0,
+        index=0, text="x", pages=[1], motion="video-animation", duration_s=4.0,
         regions=[{"page": 1, "kind": "hold", "box": [0.0, 0.0, 0.5, 0.5]}],
     )
     workdir = tmp_path / "work"
@@ -1247,7 +1247,7 @@ def test_assemble_sequence_config_error_aborts_render(tmp_path, monkeypatch):
 
     page_paths = _three_pages(tmp_path)
     seg = Segment(
-        index=0, text="x", pages=[1], motion="sequence", duration_s=4.0,
+        index=0, text="x", pages=[1], motion="frame-animation", duration_s=4.0,
         regions=[{"page": 1, "kind": "hold", "box": [0.0, 0.0, 0.5, 0.5]}],
     )
     with pytest.raises(VideoConfigError, match="cannot generate images"):
@@ -1278,7 +1278,7 @@ def test_assemble_sequence_fallback_clip_is_not_cached(tmp_path, monkeypatch):
 
     page_paths = _three_pages(tmp_path)
     seg = Segment(
-        index=0, text="x", pages=[1], motion="sequence", duration_s=4.0,
+        index=0, text="x", pages=[1], motion="frame-animation", duration_s=4.0,
         regions=[{"page": 1, "kind": "hold", "box": [0.0, 0.0, 0.5, 0.5]}],
     )
     workdir = tmp_path / "work"
@@ -1329,8 +1329,8 @@ def _sequence_harness(harness, monkeypatch, critic=False):
     seen: dict = {}
     monkeypatch.setattr(pipeline, "assemble", _sequence_capture(seen))
     config = _artifact_config()
-    config.sequence.provider = "fake-seq"
-    config.sequence.critic = critic
+    config.frame_animation.provider = "fake-seq"
+    config.frame_animation.critic = critic
     return (conn, series, chapter, config, profile), seen, animator
 
 
@@ -1341,20 +1341,20 @@ def test_build_video_sequence_mode_grounds_and_passes_animator(
     conn, series, chapter, config, profile = args
     pipeline.build_video(
         conn, series, chapter, config, profile,
-        client=FakeClient(), log=lambda m: None, video_mode="sequence",
+        client=FakeClient(), log=lambda m: None, video_mode="frame-animation",
     )
-    assert seen["motions"] == ["sequence", "sequence"]
+    assert seen["motions"] == ["frame-animation", "frame-animation"]
     assert seen["animator"] is animator
-    assert seen["interp_fps"] == config.sequence.interp_fps
+    assert seen["interp_fps"] == config.frame_animation.interp_fps
     assert seen["critic"] is None  # critic off → nothing passed through
     import json
     state = json.loads(
         (works.video_dir_for_kind("s1", "ch-1", "recap") / "render_state.json")
         .read_text()
     )
-    assert state["mode"] == "sequence"
+    assert state["mode"] == "frame-animation"
     assert state["grounded"] is True
-    assert state["sequence"] == "fake-seq::1.5"
+    assert state["frame_animation"] == "fake-seq::1.5"
     meta = works.read_video_metadata("s1", "ch-1", "recap")
     assert meta.video_gen_provider == "fake-seq"
 
@@ -1364,7 +1364,7 @@ def test_build_video_sequence_critic_built_when_enabled(harness, monkeypatch):
     conn, series, chapter, config, profile = args
     pipeline.build_video(
         conn, series, chapter, config, profile,
-        client=FakeClient(), log=lambda m: None, video_mode="sequence",
+        client=FakeClient(), log=lambda m: None, video_mode="frame-animation",
     )
     assert callable(seen["critic"])
 
@@ -1375,13 +1375,13 @@ def test_build_video_sequence_fps_change_re_renders(harness, monkeypatch):
     for _ in range(2):
         pipeline.build_video(
             conn, series, chapter, config, profile,
-            client=FakeClient(), log=lambda m: None, video_mode="sequence",
+            client=FakeClient(), log=lambda m: None, video_mode="frame-animation",
         )
     assert seen["renders"] == 1  # second build served the cached render
-    config.sequence.fps = 2.0
+    config.frame_animation.fps = 2.0
     pipeline.build_video(
         conn, series, chapter, config, profile,
-        client=FakeClient(), log=lambda m: None, video_mode="sequence",
+        client=FakeClient(), log=lambda m: None, video_mode="frame-animation",
     )
     assert seen["renders"] == 2  # fps is part of the render state
 
@@ -1392,13 +1392,13 @@ def test_build_video_sequence_model_change_re_renders(harness, monkeypatch):
     for _ in range(2):
         pipeline.build_video(
             conn, series, chapter, config, profile,
-            client=FakeClient(), log=lambda m: None, video_mode="sequence",
+            client=FakeClient(), log=lambda m: None, video_mode="frame-animation",
         )
     assert seen["renders"] == 1  # second build served the cached render
-    config.sequence.model = "google/gemini-3-pro-image"
+    config.frame_animation.model = "google/gemini-3-pro-image"
     pipeline.build_video(
         conn, series, chapter, config, profile,
-        client=FakeClient(), log=lambda m: None, video_mode="sequence",
+        client=FakeClient(), log=lambda m: None, video_mode="frame-animation",
     )
     assert seen["renders"] == 2  # the image model is part of the render state
 
@@ -1407,10 +1407,10 @@ def test_build_video_sequence_stills_provider_renders_as_panels(harness):
     conn, series, chapter, profile, *_ = harness
     logs: list[str] = []
     config = _artifact_config()
-    config.sequence.provider = "local"  # no image generator behind it
+    config.frame_animation.provider = "local"  # no image generator behind it
     pipeline.build_video(
         conn, series, chapter, config, profile,
-        client=FakeClient(), log=logs.append, video_mode="sequence",
+        client=FakeClient(), log=logs.append, video_mode="frame-animation",
     )
     assert any("generates no frames" in m for m in logs)
 

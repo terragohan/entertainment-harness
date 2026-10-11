@@ -269,15 +269,37 @@ try {
 	// linkedom's select.value getter doesn't derive from the selected option
 	// (and its setter is read-only) — mirror what a real browser returns.
 	Object.defineProperty(detailSelect, "value", { get: () => "brief" });
-	const videoModeSelect = container.querySelector(".video-mode-select") as any;
-	ok(!!videoModeSelect, "run panel has the video-mode select");
+	const videoMode = container.querySelector(".video-mode-select") as any;
+	ok(!!videoMode, "run panel has the video-mode picker");
+	const modeItems = Array.from(videoMode.querySelectorAll(".ss-item")) as any[];
 	ok(
-		Array.from(videoModeSelect.options).map((o: any) => o.value).join(",") ===
-			"kenburns,scroll,slideshow,cards,panels,motion,animate,sequence",
-		"video-mode select offers all styles",
+		modeItems.map((i) => i.getAttribute("data-value")).join(",") ===
+			"kenburns,scroll,slideshow,cards,panels,motion,video-animation,frame-animation",
+		"video-mode picker offers all styles",
 	);
-	videoModeSelect.selectedIndex = 1; // "scroll"
-	Object.defineProperty(videoModeSelect, "value", { get: () => "scroll" });
+	ok(
+		modeItems.every(
+			(i) => (i.querySelector(".ss-item-desc")?.textContent ?? "").length > 10,
+		),
+		"every style carries a description",
+	);
+	// Open the picker, search to narrow, pick "scroll" — the toggle label
+	// (what the run payload reads) follows.
+	videoMode.querySelector(".ss-toggle").click();
+	const styleSearch = videoMode.querySelector(".ss-search") as any;
+	styleSearch.value = "scroll";
+	styleSearch.dispatchEvent(new (document.defaultView?.Event ?? Event)("input"));
+	const narrowed = videoMode.querySelectorAll(".ss-item");
+	ok(
+		narrowed.length === 1 &&
+			narrowed[0].getAttribute("data-value") === "scroll",
+		"searching narrows the styles",
+	);
+	(narrowed[0] as any).click();
+	ok(
+		videoMode.querySelector(".ss-toggle-label").textContent === "scroll",
+		"picking a style updates the picker",
+	);
 	const skipBox = container.querySelector(".skip-preflight-input") as any;
 	ok(!!skipBox, "run panel has the skip-preflight checkbox");
 	skipBox.checked = true;
@@ -475,8 +497,8 @@ try {
 		"frames provider select offers openrouter",
 	);
 	ok(
-		optionsOf("Sequence provider").includes("openrouter-sequence"),
-		"sequence provider select offers openrouter-sequence",
+		optionsOf("Frame animation provider").includes("openrouter-frame-animation"),
+		"frame-animation provider select offers openrouter-frame-animation",
 	);
 	const jsonBlobs = Array.from(
 		container.querySelectorAll(".settings-group input[type=text]"),

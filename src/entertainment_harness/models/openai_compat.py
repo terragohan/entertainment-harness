@@ -222,7 +222,7 @@ class OpenAICompatAdapter:
         for attempt in range(MAX_RETRIES + 1):
             try:
                 resp = self._client.post(
-                    "/chat/completions", json=payload, timeout=None,
+                    "/chat/completions", json=payload,
                 )
             except httpx.HTTPError as exc:
                 # Network/timeout failure: transient by definition.

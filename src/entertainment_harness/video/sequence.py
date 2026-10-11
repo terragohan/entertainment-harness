@@ -1,6 +1,6 @@
-"""Frame-by-frame sequence animator for [video] mode = "sequence".
+"""Frame-by-frame sequence animator for [video] mode = "frame-animation".
 
-Where the `animate` mode's frame animator generates a few independent
+Where the `video-animation` mode's frame animator generates a few independent
 variations of one panel crop, the sequence animator builds real temporal
 animation:
 
@@ -115,11 +115,12 @@ def drift_critic(adapter, model: str) -> DriftCritic:
 
 
 class RunwaySequenceAnimator:
-    """gen4_image expansion + chained frames (the default [sequence] provider)."""
+    """gen4_image expansion + chained frames (the default [frame_animation]
+    provider)."""
 
-    name = "sequence"
+    name = "frame-animation"
     animated = True
-    capabilities = frozenset({"frame-sequence", "image-gen"})
+    capabilities = frozenset({"frame-animation", "image-gen"})
 
     def __init__(self, config: Config) -> None:
         from entertainment_harness.video.gen.runway import RunwayProvider
@@ -129,11 +130,11 @@ class RunwaySequenceAnimator:
             self.client = RunwayProvider(config)  # raises without an API key
         except VideoError as exc:
             raise VideoError(
-                f"{exc} Alternatively, set [sequence] provider ="
-                " \"openrouter-sequence\" to generate frames via the"
+                f"{exc} Alternatively, set [frame_animation] provider ="
+                " \"openrouter-frame-animation\" to generate frames via the"
                 " OpenAI-compatible endpoint ([models.openai_compat])."
             ) from exc
-        self.model = config.sequence.model or "gen4_image"
+        self.model = config.frame_animation.model or "gen4_image"
 
     def generate_frames(
         self,
@@ -153,9 +154,9 @@ class RunwaySequenceAnimator:
 class OpenRouterSequenceAnimator:
     """Expansion + chained frames via the OpenAI-compatible endpoint."""
 
-    name = "openrouter-sequence"
+    name = "openrouter-frame-animation"
     animated = True
-    capabilities = frozenset({"frame-sequence", "image-gen"})
+    capabilities = frozenset({"frame-animation", "image-gen"})
 
     def __init__(self, config: Config) -> None:
         from entertainment_harness.video.gen.openrouter import (
@@ -165,7 +166,7 @@ class OpenRouterSequenceAnimator:
 
         self.config = config
         self.client = OpenRouterImageProvider(config)  # raises without a key
-        self.model = config.sequence.model or DEFAULT_IMAGE_MODEL
+        self.model = config.frame_animation.model or DEFAULT_IMAGE_MODEL
 
     def generate_frames(
         self,
@@ -197,7 +198,7 @@ def sequence_frames_with(
     ratio, later frames chain off their predecessor, and the optional drift
     critic gets one regeneration per frame before truncating the chain.
     `client` is any image provider with Runway's text_to_image interface."""
-    cfg = config.sequence
+    cfg = config.frame_animation
     count = frame_count(duration, cfg.fps, cfg.max_frames)
     ratio = video_ratio(config.video.resolution)
     frames_dir = workdir / "sequence"

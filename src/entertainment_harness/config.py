@@ -149,8 +149,10 @@ class VideoConfig:
     # descends a per-segment page strip), "slideshow" (still pages dissolving
     # within a segment), "cards" (caption cards; the only mode for books),
     # "panels" (per-beat panel crops), "motion" (generated clips via the
-    # [video_gen] provider), "animate" (AI-generated frames of each beat's
-    # panel, via the [frames] provider). --video-mode overrides.
+    # [video_gen] provider), "video-animation" (AI-generated frames of each
+    # beat's panel, via the [frames] provider), "frame-animation" (panel
+    # outpainted to video size, AI frames chained via the [frame-animation]
+    # provider). --video-mode overrides.
     mode: str = "kenburns"
     colorize: bool = False  # opt-in DDColor page colorization for videos
     translated: bool = False  # opt-in: use translated pages (eh translate) in videos
@@ -195,8 +197,9 @@ class VideoGenConfig:
 
 @dataclass
 class FramesConfig:
-    # Frame animation for [video] mode = "animate": an image generator
-    # produces per-beat animation frames from the grounded panel crop.
+    # Frame animation for [video] mode = "video-animation": an image
+    # generator produces per-beat animation frames from the grounded panel
+    # crop.
     provider: str = "local"  # or "runway" / "openrouter"
     model: str = ""  # empty = the provider's default image model
     seconds_per_frame: float = 2.0  # generated-frame spacing at assembly
@@ -211,10 +214,11 @@ class ColorizeConfig:
 
 
 @dataclass
-class SequenceConfig:
-    # Frame-by-frame panel animation for [video] mode = "sequence": the
-    # panel is outpainted to video size, then frames chain off each other.
-    provider: str = "sequence"  # frames-registry animator name
+class FrameAnimationConfig:
+    # Frame-by-frame panel animation for [video] mode = "frame-animation":
+    # the panel is outpainted to video size, then frames chain off each
+    # other.
+    provider: str = "frame-animation"  # frames-registry animator name
     model: str = ""  # empty = the provider's default image model
     fps: float = 1.5  # generated frames per second of slot share
     max_frames: int = 12  # cost cap per anchor
@@ -298,7 +302,7 @@ class Config:
     video_gen: VideoGenConfig = field(default_factory=VideoGenConfig)
     frames: FramesConfig = field(default_factory=FramesConfig)
     colorize: ColorizeConfig = field(default_factory=ColorizeConfig)
-    sequence: SequenceConfig = field(default_factory=SequenceConfig)
+    frame_animation: FrameAnimationConfig = field(default_factory=FrameAnimationConfig)
     anime: AnimeConfig = field(default_factory=AnimeConfig)
     store: StoreConfig = field(default_factory=StoreConfig)
     library: LibraryConfig = field(default_factory=LibraryConfig)
@@ -342,6 +346,10 @@ def _scanlation_job_config(data: dict) -> ScanlationJobConfig:
     )
 
 
+class ConfigError(ValueError):
+    """Unusable config.toml — the message says what to change."""
+
+
 def load_config(path: Path | None = None) -> Config:
     config_path = path if path is not None else data_dir() / CONFIG_FILENAME
     if not config_path.exists():
@@ -354,6 +362,12 @@ def load_config(path: Path | None = None) -> Config:
 
 def parse_config(raw: dict) -> Config:
     """Build a Config from an already-parsed TOML dict (missing keys = defaults)."""
+    if "sequence" in raw:
+        raise ConfigError(
+            "The [sequence] config section was renamed to [frame_animation]"
+            ' (video modes: "animate" → "video-animation", "sequence" →'
+            ' "frame-animation"). Rename the section in config.toml.'
+        )
     config = Config()
     config.raw = raw
 
@@ -444,13 +458,15 @@ def parse_config(raw: dict) -> Config:
     colorize = raw.get("colorize", {})
     config.colorize.provider = str(colorize.get("provider", "ddcolor"))
 
-    sequence = raw.get("sequence", {})
-    config.sequence.provider = str(sequence.get("provider", "sequence"))
-    config.sequence.model = str(sequence.get("model", ""))
-    config.sequence.fps = float(sequence.get("fps", 1.5))
-    config.sequence.max_frames = int(sequence.get("max_frames", 12))
-    config.sequence.interp_fps = int(sequence.get("interp_fps", 30))
-    config.sequence.critic = bool(sequence.get("critic", True))
+    frame_animation = raw.get("frame_animation", {})
+    config.frame_animation.provider = str(
+        frame_animation.get("provider", "frame-animation")
+    )
+    config.frame_animation.model = str(frame_animation.get("model", ""))
+    config.frame_animation.fps = float(frame_animation.get("fps", 1.5))
+    config.frame_animation.max_frames = int(frame_animation.get("max_frames", 12))
+    config.frame_animation.interp_fps = int(frame_animation.get("interp_fps", 30))
+    config.frame_animation.critic = bool(frame_animation.get("critic", True))
 
     store = raw.get("store", {})
     config.store.provider = store.get("provider", "hf")

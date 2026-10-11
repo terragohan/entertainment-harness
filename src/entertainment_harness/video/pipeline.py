@@ -84,8 +84,8 @@ def _card_paths(workdir: Path, count: int) -> list[Path]:
 PACING_VERSION = 1
 
 VIDEO_MODES = (
-    "kenburns", "scroll", "slideshow", "cards", "panels", "motion", "animate",
-    "sequence",
+    "kenburns", "scroll", "slideshow", "cards", "panels", "motion",
+    "video-animation", "frame-animation",
 )
 
 
@@ -362,30 +362,30 @@ def build_video(
         # once and re-mux to gain it (clips/TTS are cached — assembly only).
         "credits": credits_enabled,
     }
-    if mode in ("scroll", "panels", "animate", "sequence"):
+    if mode in ("scroll", "panels", "video-animation", "frame-animation"):
         # Anchored renders (Phase 3 grounding): scroll renders from before
         # grounding existed lack the key and re-render once; kenburns
         # assembly is untouched, so it never carries the key. Panels and
-        # animate renders are grounded by definition — no legacy ones.
+        # video-animation renders are grounded by definition — no legacy ones.
         wanted["grounded"] = True
     if mode == "motion":
         # Generated clips depend on the provider too: switching providers
         # re-renders, like switching modes.
         wanted["video_gen"] = config.video_gen.provider
-    if mode == "animate":
-        # Same for the frame animator behind animate mode: the provider and
-        # the image model both change the generated frames.
+    if mode == "video-animation":
+        # Same for the frame animator behind video-animation mode: the
+        # provider and the image model both change the generated frames.
         wanted["frames"] = (
             f"{config.frames.provider}:"
             f"{resolve_image_model(config.frames.provider, config.frames.model)}"
         )
-    if mode == "sequence":
-        # Same for the sequence animator: provider, image model, and frame
+    if mode == "frame-animation":
+        # Same for the chained animator: provider, image model, and frame
         # rate all change the generated frames.
-        wanted["sequence"] = (
-            f"{config.sequence.provider}:"
-            f"{resolve_image_model(config.sequence.provider, config.sequence.model)}"
-            f":{config.sequence.fps}"
+        wanted["frame_animation"] = (
+            f"{config.frame_animation.provider}:"
+            f"{resolve_image_model(config.frame_animation.provider, config.frame_animation.model)}"
+            f":{config.frame_animation.fps}"
         )
     state_path = workdir / "render_state.json"
     try:
@@ -608,11 +608,11 @@ def build_video(
         clear_downstream(workdir)  # new page/motion picks invalidate clips/out
         save_script(script_path, segments, title, chapter_num, script_model)
 
-    # --- stage 3.5: region grounding (scroll/panels/animate anchored renders)
+    # --- stage 3.5: region grounding (scroll/panels/animated anchored renders)
     # Ground segments to panel regions (panels.json via Phase 2's extraction)
     # with a verifying judge; anchors are stamped on the segments and cached
     # per chapter (grounding.json). Ken Burns and slideshow skip this entirely.
-    if mode in ("scroll", "panels", "animate", "sequence"):
+    if mode in ("scroll", "panels", "video-animation", "frame-animation"):
         if progress is not None:
             progress.stage("video", "grounding")
         if all(s.regions for s in segments):
@@ -634,7 +634,8 @@ def build_video(
     # mode so cached script.json files render identically regardless of what
     # motion was persisted by an earlier run.
     for seg in segments:
-        if mode in ("scroll", "slideshow", "panels", "animate", "sequence"):
+        if mode in ("scroll", "slideshow", "panels", "video-animation",
+                    "frame-animation"):
             seg.motion = mode
         else:
             seg.motion = MOTIONS[seg.index % len(MOTIONS)]
@@ -717,7 +718,7 @@ def build_video(
                     _parse_resolution(config.video.resolution), log,
                     credits=credits,
                 )
-        elif mode == "animate":
+        elif mode == "video-animation":
             animator = get_frame_animator(config.frames.provider, config)
             if animator.animated:
                 gen_provider_name = animator.name
@@ -733,14 +734,14 @@ def build_video(
                 frame_animator=animator,
                 credits=credits,
             )
-        elif mode == "sequence":
-            animator = get_frame_animator(config.sequence.provider, config)
+        elif mode == "frame-animation":
+            animator = get_frame_animator(config.frame_animation.provider, config)
             if animator.animated:
                 gen_provider_name = animator.name
                 log(f"Stage 4/4 assembly: frame-by-frame sequences with"
-                    f" {animator.name} at {config.sequence.fps:g} fps...")
+                    f" {animator.name} at {config.frame_animation.fps:g} fps...")
                 critic = None
-                if config.sequence.critic:
+                if config.frame_animation.critic:
                     try:
                         vision = get_vision_model(config, profile)
                         if vision.warning:
@@ -755,7 +756,7 @@ def build_video(
                         log(f"  drift critic unavailable ({exc}) —"
                             " continuing without it")
             else:
-                log(f"Stage 4/4 assembly: [sequence] provider"
+                log(f"Stage 4/4 assembly: [frame_animation] provider"
                     f" {animator.name} generates no frames — rendering as"
                     " panels mode...")
                 critic = None
@@ -763,7 +764,7 @@ def build_video(
                 segments, render_paths, workdir,
                 _parse_resolution(config.video.resolution), log,
                 frame_animator=animator,
-                sequence_interp_fps=config.sequence.interp_fps,
+                sequence_interp_fps=config.frame_animation.interp_fps,
                 sequence_critic=critic,
                 credits=credits,
             )

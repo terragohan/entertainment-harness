@@ -179,10 +179,10 @@ def test_drift_critic_parses_verdicts():
 
 
 def test_sequence_animator_registered():
-    animator_cls = type(get_animator("sequence", _config_with_key()))
+    animator_cls = type(get_animator("frame-animation", _config_with_key()))
     assert animator_cls is RunwaySequenceAnimator
     assert RunwaySequenceAnimator.capabilities == frozenset(
-        {"frame-sequence", "image-gen"}
+        {"frame-animation", "image-gen"}
     )
 
 
@@ -194,20 +194,20 @@ def _config_with_key() -> Config:
 
 def test_sequence_config_parsed():
     config = parse_config({})
-    assert config.sequence.provider == "sequence"
-    assert config.sequence.fps == 1.5
-    assert config.sequence.max_frames == 12
-    assert config.sequence.interp_fps == 30
-    assert config.sequence.critic is True
+    assert config.frame_animation.provider == "frame-animation"
+    assert config.frame_animation.fps == 1.5
+    assert config.frame_animation.max_frames == 12
+    assert config.frame_animation.interp_fps == 30
+    assert config.frame_animation.critic is True
     overridden = parse_config({
-        "sequence": {"fps": 2.0, "max_frames": 8, "critic": False}
+        "frame_animation": {"fps": 2.0, "max_frames": 8, "critic": False}
     })
-    assert overridden.sequence.fps == 2.0
-    assert overridden.sequence.max_frames == 8
-    assert overridden.sequence.critic is False
+    assert overridden.frame_animation.fps == 2.0
+    assert overridden.frame_animation.max_frames == 8
+    assert overridden.frame_animation.critic is False
 
 
-# --- openrouter-sequence animator -------------------------------------------------
+# --- openrouter-frame-animation animator -------------------------------------------------
 
 
 def _or_config() -> Config:
@@ -220,18 +220,18 @@ def test_openrouter_sequence_registered_and_resolves_model():
     from entertainment_harness.video.gen.openrouter import DEFAULT_IMAGE_MODEL
     from entertainment_harness.video.sequence import OpenRouterSequenceAnimator
 
-    animator = get_animator("openrouter-sequence", _or_config())
+    animator = get_animator("openrouter-frame-animation", _or_config())
     assert isinstance(animator, OpenRouterSequenceAnimator)
-    assert animator.capabilities == frozenset({"frame-sequence", "image-gen"})
+    assert animator.capabilities == frozenset({"frame-animation", "image-gen"})
     assert animator.model == DEFAULT_IMAGE_MODEL  # empty config = default
 
     config = _or_config()
-    config.sequence.model = "gpt-6-luna"
+    config.frame_animation.model = "gpt-6-luna"
     assert OpenRouterSequenceAnimator(config).model == "gpt-6-luna"
 
 
 def test_openrouter_sequence_shares_the_loop(monkeypatch, tmp_path):
-    animator = get_animator("openrouter-sequence", _or_config())
+    animator = get_animator("openrouter-frame-animation", _or_config())
     client = FakeRunwayClient()  # same duck-typed client interface
     monkeypatch.setattr(animator, "client", client)
     panel = _write_image(tmp_path / "panel.png")
@@ -250,5 +250,5 @@ def test_runway_sequence_missing_key_points_at_openrouter(monkeypatch):
     monkeypatch.delenv("RUNWAY_API_KEY", raising=False)
     from entertainment_harness.video.script import VideoError
 
-    with pytest.raises(VideoError, match="openrouter-sequence"):
+    with pytest.raises(VideoError, match="openrouter-frame-animation"):
         RunwaySequenceAnimator(Config())

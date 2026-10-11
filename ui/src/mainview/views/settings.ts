@@ -13,8 +13,8 @@ const VIDEO_MODES = [
 	"cards",
 	"panels",
 	"motion",
-	"animate",
-	"sequence",
+	"video-animation",
+	"frame-animation",
 ];
 /** Model roles rendered as first-class subsections (models/roles.py). */
 const MODEL_ROLES = ["vision", "text", "translation", "judge"];
@@ -380,7 +380,7 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
 			row("video_gen.runway.api_key", {
 				label: "Runway API key",
 				kind: "secret",
-				help: "video_gen / frames / sequence / anime providers; falls back to RUNWAY_API_KEY",
+				help: "video_gen / frames / frame_animation / anime providers; falls back to RUNWAY_API_KEY",
 			}),
 			row("models.openai_compat.api_key", {
 				label: "OpenAI-compatible API key",
@@ -479,9 +479,9 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
 		),
 	);
 	const ttsNodes = renderDict(fields, placed, config, "tts");
-	// frames/sequence get curated cards (provider select + model guidance);
-	// colorize/anime stay generic. Future keys under any of these still
-	// surface under "Other settings" via renderUnplaced.
+	// frames/frame_animation get curated cards (provider select + model
+	// guidance); colorize/anime stay generic. Future keys under any of these
+	// still surface under "Other settings" via renderUnplaced.
 	const framesCard = el(
 		"fieldset",
 		{ class: "settings-subsection" },
@@ -490,7 +490,7 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
 			label: "Frame provider",
 			kind: "select",
 			options: ["local", "runway", "openrouter"],
-			help: "animate-mode frame generator; see `eh plugins`",
+			help: "video-animation mode frame generator; see `eh plugins`",
 		}),
 		row("frames.model", {
 			label: "Frame model",
@@ -499,24 +499,24 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
 		row("frames.seconds_per_frame"),
 		row("frames.max_frames"),
 	);
-	const sequenceCard = el(
+	const frameAnimationCard = el(
 		"fieldset",
 		{ class: "settings-subsection" },
-		el("legend", {}, "sequence"),
-		row("sequence.provider", {
-			label: "Sequence provider",
+		el("legend", {}, "frame_animation"),
+		row("frame_animation.provider", {
+			label: "Frame animation provider",
 			kind: "select",
-			options: ["sequence", "openrouter-sequence", "local"],
-			help: "frame-by-frame generator for sequence mode; local degrades to panels",
+			options: ["frame-animation", "openrouter-frame-animation", "local"],
+			help: "frame-by-frame generator for frame-animation mode; local degrades to panels",
 		}),
-		row("sequence.model", {
-			label: "Sequence model",
+		row("frame_animation.model", {
+			label: "Frame animation model",
 			help: "image model id with image OUTPUT, e.g. google/gemini-2.5-flash-image or openai/gpt-5-image; blank = the provider's default",
 		}),
-		row("sequence.fps"),
-		row("sequence.max_frames"),
-		row("sequence.interp_fps"),
-		row("sequence.critic"),
+		row("frame_animation.fps"),
+		row("frame_animation.max_frames"),
+		row("frame_animation.interp_fps"),
+		row("frame_animation.critic"),
 	);
 	container.append(
 		groupCard(
@@ -553,7 +553,7 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
 				),
 			),
 			framesCard,
-			sequenceCard,
+			frameAnimationCard,
 			videoGenCard,
 		),
 	);

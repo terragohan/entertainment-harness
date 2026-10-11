@@ -115,7 +115,7 @@ phases and verifiable gates.
 - Unified recap pipeline — five detail grains, one video per chapter, steering instructions ([unify-recap-narrate](docs/initiatives/unify-recap-narrate/))
 - Video presentation — Ken Burns, scroll mode, anchored panel-first pacing, four extra styles ([video-mode](docs/initiatives/video-mode/), [anchored-scroll](docs/initiatives/anchored-scroll/), [video-styles](docs/initiatives/video-styles/))
 - Character bible — per-work cast registry injected into recap prompts ([character-bible](docs/initiatives/character-bible/))
-- AI animation modes — `animate` (frames per beat) and `sequence` (frame-by-frame chains) ([panel-animation](docs/initiatives/panel-animation/), [frame-sequence](docs/initiatives/frame-sequence/))
+- AI animation modes — `video-animation` (frames per beat) and `frame-animation` (frame-by-frame chains) ([panel-animation](docs/initiatives/panel-animation/), [frame-sequence](docs/initiatives/frame-sequence/))
 - Plugin system — providers as data, conformance-checked ([plugin-extensibility](docs/initiatives/plugin-extensibility/))
 
 **In development**

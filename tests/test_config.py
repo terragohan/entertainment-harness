@@ -7,8 +7,10 @@ import pytest
 from entertainment_harness.config import (
     DEFAULT_ENABLED_SOURCES,
     Config,
+    ConfigError,
     ConfigWriteError,
     load_config,
+    parse_config,
     save_config,
 )
 
@@ -132,3 +134,8 @@ def test_save_config_failed_replace_leaves_original_and_cleans_up(
         save_config(path, {"sources": {"enabled": []}})
     assert path.read_text() == original
     assert [p.name for p in tmp_path.iterdir()] == ["config.toml"]
+
+
+def test_parse_config_rejects_the_renamed_sequence_section():
+    with pytest.raises(ConfigError, match="frame_animation"):
+        parse_config({"sequence": {"fps": 2.0}})

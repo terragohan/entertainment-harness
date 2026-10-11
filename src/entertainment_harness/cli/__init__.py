@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from entertainment_harness import db, library
-from entertainment_harness.config import data_dir, load_config
+from entertainment_harness.config import ConfigError, data_dir, load_config
 from entertainment_harness.hardware import probe, snapshot
 from entertainment_harness.library import works
 from entertainment_harness.models.base import ModelError
@@ -372,7 +372,7 @@ def _run_chapter_pipeline(
         except library.LibraryError as exc:
             err_console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1) from exc
-        except (VideoError, ModelError, PluginError) as exc:
+        except (VideoError, ModelError, PluginError, ConfigError) as exc:
             err_console.print(f"[red]{escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
 
@@ -447,9 +447,9 @@ def recap(
         None, "--video-mode",
         help="video presentation: kenburns (default), scroll, slideshow,"
         " cards (caption cards; the only mode for books), panels, motion,"
-        " animate (AI-generated panel frames; uses [frames] provider),"
-        " sequence (panel outpainted to video size, AI frames chained into"
-        " motion; uses [sequence] provider)",
+        " video-animation (AI-generated panel frames; uses [frames]"
+        " provider), frame-animation (panel outpainted to video size, AI"
+        " frames chained into motion; uses [frame_animation] provider)",
     ),
     panel_first: bool | None = typer.Option(
         None, "--panel-first/--no-panel-first",

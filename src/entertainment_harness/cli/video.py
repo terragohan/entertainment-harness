@@ -1,4 +1,5 @@
-"""Video commands: tiktok, online-summary, play, compress, anime-scene."""
+"""Video commands: tiktok, online-summary, play, compress, anime-scene,
+anime-render."""
 
 from __future__ import annotations
 
@@ -93,6 +94,35 @@ def anime_scene(
             err_console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1) from exc
     console.print(f"[bold green]{out}[/bold green]")
+
+
+@app.command()
+def anime_render(
+    timeline: Path = typer.Argument(
+        ..., help="path to a timeline.json (sparse animation timeline)"
+    ),
+    out: Path | None = typer.Option(
+        None, "--out", "-o",
+        help="workdir for frames/ + out.mp4 (default: <timeline dir>/render)",
+    ),
+) -> None:
+    """Render a sparse animation timeline (timeline.json) into an MP4.
+
+    Deterministic: validates the timeline, resolves every frame with the
+    sequencer, composites it, and assembles frames + audio with ffmpeg at
+    the timeline's exact fps. Needs no manga, DB, or model/API access —
+    only the assets the timeline references. See
+    docs/initiatives/animation-conductor/."""
+    from entertainment_harness.anime.render import render_timeline
+    from entertainment_harness.anime.timeline import TimelineError
+    from entertainment_harness.video.script import VideoError
+
+    try:
+        out_path = render_timeline(timeline, workdir=out, log=console.print)
+    except (TimelineError, VideoError) as exc:
+        err_console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[bold green]{out_path}[/bold green]")
 
 
 @app.command()

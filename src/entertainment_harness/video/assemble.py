@@ -521,11 +521,12 @@ def assemble(
 ) -> tuple[Path, float]:
     """Render clips, concat, mux narration + subtitles. Returns (out, seconds).
 
-    `frame_animator` (a video.frames provider) is consulted by "animate"- and
-    "sequence"-motion segments; None or a non-animated provider renders the
-    panels-mode Ken Burns crop instead. `sequence_critic` (a drift critic,
-    video/sequence.py) is passed through to the sequence animator. `credits`
-    appends the attribution end card (video/credits.py)."""
+    `frame_animator` (a video.frames provider) is consulted by
+    "video-animation"- and "frame-animation"-motion segments; None or a
+    non-animated provider renders the panels-mode Ken Burns crop instead.
+    `sequence_critic` (a drift critic, video/sequence.py) is passed through
+    to the chained animator. `credits` appends the attribution end card
+    (video/credits.py)."""
     clips_dir = workdir / "clips"
     clips_dir.mkdir(parents=True, exist_ok=True)
     clips: list[Path] = []
@@ -557,27 +558,27 @@ def assemble(
                     f" {slot:.1f}s)")
             clips.append(dest)
             continue
-        if seg.motion in ("panels", "animate", "sequence"):
+        if seg.motion in ("panels", "video-animation", "frame-animation"):
             # Guided view: one clip per grounded anchor. Hold anchors use
             # their panel crop, pan anchors the full page; equal shares of
-            # the slot, hard cuts between panels. "animate" stitches frames
-            # generated from the crop (xfade chain); "sequence" expands the
-            # crop to video size and chains frames temporally (minterpolate
-            # smoothed). Without an animated provider both degrade to
-            # panels' Ken Burns zoom, and a provider failure on one anchor
-            # degrades just that anchor the same way — except a
-            # VideoConfigError (broken model/provider config), which aborts
-            # the render instead of storming the API per anchor.
+            # the slot, hard cuts between panels. "video-animation" stitches
+            # frames generated from the crop (xfade chain);
+            # "frame-animation" expands the crop to video size and chains
+            # frames temporally (minterpolate smoothed). Without an animated
+            # provider both degrade to panels' Ken Burns zoom, and a provider
+            # failure on one anchor degrades just that anchor the same way —
+            # except a VideoConfigError (broken model/provider config), which
+            # aborts the render instead of storming the API per anchor.
             anchors = _segment_anchors(seg, slot, len(page_paths))
             if anchors:
                 share = slot / len(anchors)
-                animate = (
-                    seg.motion == "animate"
+                video_animation = (
+                    seg.motion == "video-animation"
                     and frame_animator is not None
                     and frame_animator.animated
                 )
-                sequence = (
-                    seg.motion == "sequence"
+                frame_animation = (
+                    seg.motion == "frame-animation"
                     and frame_animator is not None
                     and frame_animator.animated
                 )
@@ -593,10 +594,10 @@ def assemble(
                     dest = clips_dir / f"clip-{seg.index:02d}-{k}.mp4"
                     if dest.exists():
                         log(f"  clip-{seg.index:02d}-{k}: cached")
-                    elif animate or sequence:
+                    elif video_animation or frame_animation:
                         degraded = False
                         try:
-                            if animate:
+                            if video_animation:
                                 frames = frame_animator.generate_frames(
                                     image, seg, share, workdir, log
                                 )
@@ -620,7 +621,7 @@ def assemble(
                                 " fallback")
                             frames = []
                             degraded = True
-                        if frames and animate:
+                        if frames and video_animation:
                             build_xfade_clip(frames, share, resolution, dest)
                             log(f"  clip-{seg.index:02d}-{k}: rendered"
                                 f" ({anchor['kind']} on page"
@@ -655,7 +656,7 @@ def assemble(
                     clips.append(dest)
                 continue
             # Ungrounded segment: fall through to the per-page path (the
-            # panels/animate motion there degrades to the plain zoom).
+            # panels/animated motion there degrades to the plain zoom).
         if seg.motion == "slideshow":
             # Static crops dissolving into each other within the segment;
             # one clip per segment, hard cuts between segments.

@@ -1,0 +1,109 @@
+# The hosted i2i sweep, fal edition: every instruction-editing endpoint on
+# fal that accepts an input image (live catalog, 2026-10-10), ordered
+# cheap-first. Arms declare the endpoint id directly. Compare against
+# models-frames.toml — same panels, context, and duration — so the galleries
+# answer "which edit model gives the most faithful animated frames".
+#
+# Highlights: flux-2/klein/9b/edit is the small (9B) open-weights edit
+# model; the nano-banana family is Google's Gemini image line on fal;
+# seedream v4/v4.5/v5 is ByteDance's; flux-3/edit-image is BFL's newest.
+#
+# Costs are fal list prices per image at ~1MP (2026-10-10); a full run is
+# ~68 generations. Key: FAL_KEY env var. Endpoint ids rot upstream —
+# a retired endpoint fails its arm (recorded, run continues).
+#
+#   uv run python -m evals.imagegen list evals/experiments/models-i2i.toml
+#   uv run python -m evals.imagegen run evals/experiments/models-i2i.toml --limit 4   # cheap probe
+#   uv run python -m evals.imagegen run evals/experiments/models-i2i.toml
+
+name = "models-i2i"
+mode = "video-animation"
+duration = 4.0
+panels = ["samples/kenja-ch0/page-07.jpg", "samples/kenja-ch0/page-09.jpg"]
+context = "Kenja no Mago chapter 0: rain begins over a mountain valley as a hooded stranger approaches; in town, a young man freezes, sensing imminent danger."
+judge = true
+
+[[arms]]
+name = "klein-9b-edit"        # $0.009–0.011/MP — small open-weights edit
+provider = "fal"
+model = "fal-ai/flux-2/klein/9b/edit"
+
+[[arms]]
+name = "nano-banana-lite-edit"
+provider = "fal"
+model = "google/nano-banana-lite/edit"
+
+[[arms]]
+name = "qwen-image-edit"
+provider = "fal"
+model = "fal-ai/qwen-image-edit"
+
+[[arms]]
+name = "seedream-v4-edit"
+provider = "fal"
+model = "fal-ai/bytedance/seedream/v4/edit"
+
+[[arms]]
+name = "seedream-v45-edit"
+provider = "fal"
+model = "fal-ai/bytedance/seedream/v4.5/edit"
+
+[[arms]]
+name = "nano-banana-edit"
+provider = "fal"
+model = "fal-ai/nano-banana/edit"
+
+[[arms]]
+name = "flux-kontext-pro"
+provider = "fal"
+model = "fal-ai/flux-pro/kontext"
+
+[[arms]]
+name = "nano-banana-2-edit"
+provider = "fal"
+model = "fal-ai/nano-banana-2/edit"
+
+[[arms]]
+name = "nano-banana-21-edit"
+provider = "fal"
+model = "google/nano-banana-2.1/edit"
+
+[[arms]]
+name = "ideogram-v45-edit"
+provider = "fal"
+model = "ideogram/v4.5/edit"
+
+[[arms]]
+name = "muse-edit"
+provider = "fal"
+model = "meta/muse-image/edit"
+
+[[arms]]
+name = "gpt-image-2-edit"
+provider = "fal"
+model = "openai/gpt-image-2/edit"
+
+[[arms]]
+name = "grok-imagine-2-edit"
+provider = "fal"
+model = "xai/grok-imagine-image/v2.0/edit"
+
+[[arms]]
+name = "flux-2-pro-edit"
+provider = "fal"
+model = "fal-ai/flux-2-pro/edit"
+
+[[arms]]
+name = "seedream-v5-pro-edit"
+provider = "fal"
+model = "bytedance/seedream/v5/pro/edit"
+
+[[arms]]
+name = "nano-banana-pro-edit"
+provider = "fal"
+model = "fal-ai/nano-banana-pro/edit"
+
+[[arms]]
+name = "flux-3-edit"
+provider = "fal"
+model = "blackforestlabs/flux-3/edit-image"

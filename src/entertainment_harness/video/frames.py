@@ -1,4 +1,4 @@
-"""Frame animators for [video] mode = "animate".
+"""Frame animators for [video] mode = "video-animation".
 
 A frame animator turns one grounded panel crop into the sequence of frames
 the assembly stitches (xfade) into that beat's clip. Providers register in
@@ -218,12 +218,13 @@ REGISTRY.register("runway", "entertainment_harness.video.frames:RunwayFrameAnima
 REGISTRY.register(
     "openrouter", "entertainment_harness.video.frames:OpenRouterFrameAnimator"
 )
-# Frame-by-frame expansion + chained frames for [video] mode = "sequence".
+# Frame-by-frame expansion + chained frames for [video] mode =
+# "frame-animation".
 REGISTRY.register(
-    "sequence", "entertainment_harness.video.sequence:RunwaySequenceAnimator"
+    "frame-animation", "entertainment_harness.video.sequence:RunwaySequenceAnimator"
 )
 REGISTRY.register(
-    "openrouter-sequence",
+    "openrouter-frame-animation",
     "entertainment_harness.video.sequence:OpenRouterSequenceAnimator",
 )
 
@@ -235,13 +236,13 @@ def get_animator(name: str, config: Config) -> FrameAnimator:
 def resolve_image_model(provider: str, config_model: str) -> str:
     """The image model a built-in frames/sequence animator will actually use
     — render-state keying must see a changed default (a retired upstream id
-    swapped out) just like an explicit `[frames]`/`[sequence]` model edit.
+    swapped out) just like an explicit `[frames]`/`[frame_animation]` model edit.
     Third-party providers key on the raw config value."""
     if config_model:
         return config_model
-    if provider in ("runway", "sequence"):
+    if provider in ("runway", "frame-animation"):
         return "gen4_image"
-    if provider in ("openrouter", "openrouter-sequence"):
+    if provider in ("openrouter", "openrouter-frame-animation"):
         from entertainment_harness.video.gen.openrouter import (
             DEFAULT_IMAGE_MODEL,
         )
