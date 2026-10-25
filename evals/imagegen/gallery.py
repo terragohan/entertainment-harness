@@ -235,7 +235,7 @@ def _panel_block(run_dir: Path, index: int, panel: dict) -> str:
         f" · {m.get('wall_s', '?')}s wall · ratio {_e(m.get('ratio', '?'))}"
     )
     if m.get("truncated"):
-        metrics += f" · {_badge('truncated', 'the drift critic cut the chain short')}"
+        metrics += f" · {_badge('truncated', 'the drift critic/director cut the chain short')}"
     out.append(f"<p class='summary'>{metrics}</p>")
     clip = panel.get("clip")
     if clip and (run_dir / clip).is_file():

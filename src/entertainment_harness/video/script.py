@@ -27,6 +27,25 @@ class VideoConfigError(VideoError):
     pass
 
 
+#: Delivery phrasing injected into the narration-writing prompts below
+#: (and panelfirst.py/short.py). Plain keeps the original instructions
+#: byte-identical; drama suits Fish's drama models (and any other engine
+#: that wants a performed, expressive read).
+SCRIPT_GUIDANCE_PLAIN = "Plain spoken English"
+SCRIPT_GUIDANCE_DRAMA = (
+    "Expressive dramatic narration, performed like an audiobook rather than"
+    " summarized: vary sentence rhythm with the scene's tension, let"
+    " exclamations, questions, ellipses, and em-dashes land where the story"
+    " earns them, and allow a shouted word in ALL-CAPS"
+)
+
+
+def script_guidance_for(engine) -> str:
+    """The delivery phrasing for the script prompts; plugin engines written
+    before `script_guidance` fall back to the plain wording."""
+    return getattr(engine, "script_guidance", SCRIPT_GUIDANCE_PLAIN)
+
+
 @dataclass
 class Segment:
     index: int
@@ -67,7 +86,7 @@ Turn the recap below into spoken narration. Requirements:
 - 25 to 40 short narration beats; 450-600 words in total (about 3-4 minutes read aloud). Cover the whole recap; do not skip scenes.
 - Each beat is ONE spoken sentence, typically 12-22 words (about 4-8 seconds read aloud). Cut at the story's natural beats; never pad or merge sentences just to hit a count.
 - Tell the story in the recap's order.
-- Plain spoken English, present tense, no headers, no stage directions.
+- {guidance}, present tense, no headers, no stage directions.
 - Faithful to the recap: no new events, names, or details.{cast}
 - Tag each beat with a short "moment" label naming the story beat (e.g. "Shin hunts the boar"); reuse the same label for consecutive beats in the same scene.
 
@@ -151,9 +170,11 @@ def generate_script(
     chapter_num: float,
     max_attempts: int = SCRIPT_ATTEMPTS,
     cast: str = "",
+    guidance: str = SCRIPT_GUIDANCE_PLAIN,
 ) -> list[Segment]:
     prompt = SCRIPT_PROMPT.format(
-        chapter=f"{chapter_num:g}", title=title, recap=recap, cast=cast
+        chapter=f"{chapter_num:g}", title=title, recap=recap, cast=cast,
+        guidance=guidance,
     )
     last_error: VideoError | None = None
     for attempt in range(max_attempts):
@@ -279,12 +300,17 @@ def save_script(
     title: str,
     chapter_num: float,
     model: str,
+    guidance: str | None = None,
 ) -> None:
+    """Persist script.json. `guidance` records the delivery phrasing the
+    script was written for (engine-dependent); stage re-saves that fill in
+    pages/motion omit it and keep the file's current value."""
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "chapter": chapter_num,
         "title": title,
         "model": model,
+        "guidance": read_script_guidance(path) if guidance is None else guidance,
         "segments": [s.to_dict() for s in segments],
     }
     path.write_text(json.dumps(payload, indent=2))
@@ -294,3 +320,14 @@ def load_script(path: Path) -> tuple[list[Segment], str]:
     """Return (segments, model tag) from a saved script.json."""
     payload = json.loads(path.read_text())
     return [Segment.from_dict(s) for s in payload["segments"]], payload.get("model", "")
+
+
+def read_script_guidance(path: Path) -> str:
+    """The delivery phrasing a saved script.json was written for ("" when
+    the file predates the field — callers treat that as the plain wording,
+    which is what every pre-guidance script was written with)."""
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return ""
+    return str(payload.get("guidance", ""))

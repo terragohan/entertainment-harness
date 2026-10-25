@@ -21,6 +21,7 @@ from typer.testing import CliRunner
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from evals.imagegen import clients as clients_mod  # noqa: E402
+from evals.imagegen import director as director_mod  # noqa: E402
 from evals.imagegen import gallery as gallery_mod  # noqa: E402
 from evals.imagegen import judge as judge_mod  # noqa: E402
 from evals.imagegen import runner as runner_mod  # noqa: E402
@@ -33,6 +34,8 @@ from evals.imagegen.experiment import (  # noqa: E402
 
 from entertainment_harness.config import Config  # noqa: E402
 from entertainment_harness.video.gen.openrouter import DEFAULT_IMAGE_MODEL  # noqa: E402
+from entertainment_harness.video.script import Segment  # noqa: E402
+from entertainment_harness.video.sequence import EXPAND_PROMPT  # noqa: E402
 
 cli = CliRunner()
 
@@ -498,6 +501,230 @@ def test_runner_sequence_truncation_with_always_drift_critic(tmp_path):
     assert "judge" not in panel  # scoring disabled
     # expand + first chain + its rejected retry = 3 generations
     assert len(made[0]["client"].calls) == 3
+
+
+# --- director ---------------------------------------------------------------------
+
+
+def _directed_run(tmp_path, vision, *, duration=1.5, model="test-model"):
+    """One direct_sequence call over a fresh fake client (1.5s at the
+    default 1.5fps = expansion + one chained frame). Returns the client's
+    call record, the accepted frames, and the trajectory."""
+    panel = _write_panel(tmp_path / "panel.jpg")
+    client = FakeImageClient()
+    frames, trajectory = director_mod.direct_sequence(
+        client, model, Config(), panel, Segment(index=0, text="test scene"),
+        duration, tmp_path / "work", vision, "scripted:1b",
+        log=lambda m: None,
+    )
+    return client, frames, trajectory
+
+
+def test_director_bank_lookup_and_revision_dispatch():
+    assert director_mod.pick_instruction("bfl/flux-2-pro").name == "bfl-safe"
+    assert director_mod.pick_instruction("flux-3-edit").name == "bfl-safe"
+    assert director_mod.pick_instruction("gen4_image").name == "default"
+    assert director_mod.pick_instruction("nano-banana-21").name == "default"
+    assert director_mod.instruction_by_name("default").expand == EXPAND_PROMPT
+    with pytest.raises(ValueError, match="unknown instruction"):
+        director_mod.instruction_by_name("bogus")
+    assert (director_mod.revision_for({"drift": {"verdict": "drift"}}).name
+            == "preserve-composition")
+    assert (director_mod.revision_for({"faithfulness": {"verdict": "drift"}})
+            .name == "preserve-composition")
+    assert (director_mod.revision_for({"motion": {"verdict": "stagnant"}})
+            .name == "motion-push")
+    assert (director_mod.revision_for({"drift": {"verdict": "ok"},
+                                       "motion": {"verdict": "advancing"}})
+            is None)
+    # inconclusive verdicts trigger nothing — a murky judge degrades to the
+    # plain loop instead of burning revisions
+    assert director_mod.revision_for({"drift": {"verdict": "inconclusive"}}) is None
+
+
+def test_director_rank_orders_verdicts():
+    rank = director_mod._rank
+    advancing = rank({"drift": {"verdict": "ok"},
+                      "motion": {"verdict": "advancing"}})
+    stagnant = rank({"drift": {"verdict": "ok"},
+                     "motion": {"verdict": "stagnant"}})
+    drifted = rank({"drift": {"verdict": "drift"}})
+    assert advancing > stagnant > drifted
+    # frame 0 verdicts (faithfulness only) rank on the last element
+    assert (rank({"faithfulness": {"verdict": "ok"}})
+            > rank({"faithfulness": {"verdict": "drift"}}))
+
+
+def test_director_frame0_drift_triggers_expand_revision(tmp_path):
+    vision = ScriptedVision(faith=("DRIFT: the face changed", "OK"))
+    client, frames, trajectory = _directed_run(tmp_path, vision)
+    assert len(frames) == 2
+    f0, f1 = trajectory
+    assert [a["instruction"] for a in f0["attempts"]] == [
+        "default", "preserve-composition",
+    ]
+    assert f0["attempts"][0]["verdicts"]["faithfulness"]["verdict"] == "drift"
+    assert f0["picked"] == 1
+    assert [a["instruction"] for a in f1["attempts"]] == ["default"]
+    # the judge's reason reached the revision prompt
+    assert "the face changed" in client.calls[1]["prompt"]
+    assert "previous attempt" in client.calls[1]["prompt"]
+
+
+def test_director_chained_drift_triggers_preserve_composition(tmp_path):
+    vision = ScriptedVision(drift=("DRIFT: background moved", "OK"))
+    client, frames, trajectory = _directed_run(tmp_path, vision)
+    assert len(frames) == 2
+    f0, f1 = trajectory
+    assert f0["picked"] == 0
+    assert [a["instruction"] for a in f1["attempts"]] == [
+        "default", "preserve-composition",
+    ]
+    assert f1["picked"] == 1
+    # motion is not assessed on the drifted attempt (revision already decided)
+    assert "motion" not in f1["attempts"][0]["verdicts"]
+    assert f1["attempts"][1]["verdicts"]["motion"]["verdict"] == "advancing"
+    assert "background moved" in client.calls[2]["prompt"]
+
+
+def test_director_stagnation_triggers_motion_push(tmp_path):
+    vision = ScriptedVision(motion=("STAGNANT: nothing moved", "ADVANCING"))
+    client, frames, trajectory = _directed_run(tmp_path, vision)
+    assert len(frames) == 2
+    f1 = trajectory[1]
+    assert [a["instruction"] for a in f1["attempts"]] == [
+        "default", "motion-push",
+    ]
+    assert f1["picked"] == 1
+    assert "barely moved" in client.calls[2]["prompt"]
+    assert "nothing moved" in client.calls[2]["prompt"]
+
+
+def test_director_always_drift_truncates_at_attempt_cap(tmp_path):
+    vision = ScriptedVision(drift=("DRIFT: melted",))  # repeats forever
+    client, frames, trajectory = _directed_run(tmp_path, vision)
+    assert len(frames) == 1  # only the expansion survived
+    f0, f1 = trajectory
+    assert f0["picked"] == 0
+    assert len(f1["attempts"]) == director_mod.MAX_ATTEMPTS
+    assert f1["picked"] is None
+    assert all(a["verdicts"]["drift"]["verdict"] == "drift"
+               for a in f1["attempts"])
+    # expand + chain + preserve-composition revision; the third attempt is
+    # byte-identical to the second (same instruction, same judge note), so
+    # content-addressing dedups it into a cache hit
+    assert len(client.calls) == 3
+
+
+def test_director_cap_pick_prefers_earliest_on_ties(tmp_path):
+    # Every attempt comes back stagnant: all tie on (drift-ok, not
+    # advancing), so the earliest attempt wins — and stagnation alone never
+    # truncates the chain.
+    vision = ScriptedVision(motion=("STAGNANT: still",))
+    client, frames, trajectory = _directed_run(tmp_path, vision)
+    assert len(frames) == 2
+    f1 = trajectory[1]
+    assert [a["instruction"] for a in f1["attempts"]] == [
+        "default", "motion-push", "motion-push",
+    ]
+    assert f1["picked"] == 0
+    assert len(client.calls) == 3  # the repeat motion-push attempt dedups
+
+
+def test_director_revisions_are_cached_distinct_files(tmp_path):
+    vision = ScriptedVision(drift=("DRIFT: background moved", "OK"))
+    client, frames, trajectory = _directed_run(tmp_path, vision)
+    assert len(client.calls) == 3  # expand + drifted chain + revision
+    assert len({c["dest"] for c in client.calls}) == 3  # distinct attempts
+
+    # A rerun re-assesses the cached candidates instead of regenerating:
+    # no new client calls, same picks, same trajectory.
+    rerun = _directed_run(tmp_path, ScriptedVision(drift=("DRIFT: background moved",
+                                                          "OK")))
+    assert rerun[0].calls == []
+    assert rerun[1] == frames
+    assert rerun[2] == trajectory
+
+
+def test_runner_director_arm_records_trajectory_plain_arm_unchanged(tmp_path):
+    exp = _make_experiment(tmp_path, mode="frame-animation", duration=1.5,
+                           judge=True, arms=[
+        ['name = "directed"', "director = true", "critic = false"],
+        ['name = "plain"', "critic = false"],
+    ])
+    vision = ScriptedVision()
+    made = []
+    run_dir = runner_mod.run_experiment(
+        exp, run_dir=tmp_path / "run", client_factory=_client_factory(made),
+        judge_resolver=lambda c, p: (vision, "scripted:1b"), log=lambda m: None,
+    )
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["judge"]["model"] == "scripted:1b"
+    directed, plain = manifest["arms"]
+    assert directed["overrides"]["director"] is True
+
+    (d_panel,) = directed["panels"]
+    assert d_panel["metrics"]["produced"] == 2
+    assert d_panel["metrics"]["revisions"] == 0  # all attempts clean
+    assert d_panel["metrics"]["judge_calls"] == 3  # 1 faith + drift + motion
+    assert [t["picked"] for t in d_panel["trajectory"]] == [0, 0]
+    assert [t["attempts"][0]["instruction"] for t in d_panel["trajectory"]] == [
+        "default", "default",
+    ]
+    assert "judge" in d_panel  # directed arms are scored like any other
+
+    (p_panel,) = plain["panels"]
+    assert p_panel["metrics"]["produced"] == 2
+    assert "trajectory" not in p_panel
+    assert "revisions" not in p_panel["metrics"]
+    assert len(made[0]["client"].calls) == len(made[1]["client"].calls) == 2
+
+
+def test_runner_director_requires_judge_adapter(tmp_path):
+    exp = _make_experiment(tmp_path, mode="frame-animation", duration=1.5,
+                           judge=False, arms=[
+        ['name = "directed"', "director = true"],
+        ['name = "plain"', "critic = false"],
+    ])
+
+    def boom(config, profile):
+        raise RuntimeError("ollama is down")
+
+    run_dir = runner_mod.run_experiment(
+        exp, run_dir=tmp_path / "run", client_factory=_client_factory([]),
+        judge_resolver=boom, log=lambda m: None,
+    )
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    # the director arm still triggers adapter resolution under --no-judge
+    assert "ollama is down" in manifest["judge"]["warning"]
+    directed, plain = manifest["arms"]
+    assert "judge adapter" in directed["error"]
+    assert directed["panels"] == []
+    assert "error" not in plain  # the failure stays per-arm
+    assert plain["panels"][0]["metrics"]["produced"] == 2
+
+
+def test_director_knob_validation(tmp_path):
+    _write_panel(tmp_path / "panel.jpg")
+    animate = _write_toml(tmp_path, (
+        'name = "exp"\nmode = "video-animation"\nduration = 4.0\n'
+        'panels = ["panel.jpg"]\n[[arms]]\nname = "a1"\ndirector = true\n'
+    ))
+    with pytest.raises(ExperimentError, match="frame-animation-mode knob"):
+        load_experiment(animate)
+    conflict = _write_toml(tmp_path, (
+        'name = "exp"\nmode = "frame-animation"\nduration = 4.0\n'
+        'panels = ["panel.jpg"]\n[[arms]]\nname = "a1"\n'
+        "director = true\ncritic = true\n"
+    ))
+    with pytest.raises(ExperimentError, match="conflict"):
+        load_experiment(conflict)
+    non_bool = _write_toml(tmp_path, (
+        'name = "exp"\nmode = "frame-animation"\nduration = 4.0\n'
+        'panels = ["panel.jpg"]\n[[arms]]\nname = "a1"\ndirector = "yes"\n'
+    ))
+    with pytest.raises(ExperimentError, match="director must be a bool"):
+        load_experiment(non_bool)
 
 
 # --- runner: failure isolation ----------------------------------------------------

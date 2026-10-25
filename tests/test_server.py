@@ -392,7 +392,8 @@ def test_export_conflict_409(client, data, monkeypatch, tmp_path):
 
 def test_config_get_defaults(client):
     cfg = client.get("/api/config").json()
-    assert cfg["video"]["voice"] == "af_heart"
+    assert cfg["video"]["voice"] == ""
+    assert cfg["video"]["tts_engine"] == "fish"
     assert cfg["sources"]["enabled"] == ["mangadex", "weebcentral"]
     # `raw` (the parsed config.toml for plugin merges) is not exposed
     assert "raw" not in cfg
@@ -731,6 +732,65 @@ def test_run_invalid_options_422(client):
     ).status_code == 422
 
 
+def test_run_fps_invalid_422(client):
+    """A non-positive fps is rejected up front rather than failing mid-run."""
+    for bad in (0, -1.5):
+        resp = client.post("/api/runs", json={"work": "s1", "fps": bad})
+        assert resp.status_code == 422
+        assert "fps" in resp.json()["detail"]
+
+
+def test_run_fps_reaches_build_video(client, monkeypatch):
+    """POST /api/runs fps threads through RunOptions into build_video."""
+    import entertainment_harness.pipelines.recap as recap_mod
+    import entertainment_harness.video.pipeline as video_mod
+
+    seen: dict = {}
+
+    def fake_recap_series(conn, series, config, profile, **kw):
+        progress = kw.get("progress")
+        progress.start(1)
+        progress.chapter_start(1.0)
+        conn.execute(
+            "INSERT INTO recaps (chapter_id, summary, created_at, detail)"
+            " VALUES ('ch-1', 'recap text', 'now', 'standard')"
+        )
+        conn.commit()
+        on_recap = kw.get("on_recap")
+        if on_recap is not None:
+            on_recap("ch-1")
+        progress.chapter_done()
+        return ["ch-1"]
+
+    def fake_build_video(conn, row, chapter_row, config, profile, **kw):
+        seen.update(kw)
+        out = works.video_file_path(row["id"], chapter_row["id"], "recap")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"fake-mp4")
+        conn.execute(
+            "INSERT INTO videos (series_id, from_chapter, to_chapter, path,"
+            " duration_s, created_at, kind)"
+            " VALUES (?, ?, ?, ?, 1.0, 'now', 'recap')",
+            (row["id"], chapter_row["chapter_num"],
+             chapter_row["chapter_num"], str(out)),
+        )
+        conn.commit()
+        return out
+
+    monkeypatch.setattr(recap_mod, "recap_series", fake_recap_series)
+    monkeypatch.setattr(video_mod, "build_video", fake_build_video)
+    resp = client.post("/api/runs", json={
+        "work": "s1", "video": True, "video_mode": "frame-animation",
+        "fps": 4.0, "panel_first": False, "skip_preflight": True,
+    })
+    assert resp.status_code == 201
+    run = _wait_for_status(client, resp.json()["id"])
+    assert run["status"] == "done"
+    assert run["options"]["fps"] == 4.0
+    assert seen["video_mode"] == "frame-animation"
+    assert seen["fps"] == 4.0
+
+
 def test_chapter_needs_work(data):
     """chapter_needs_work: a chapter is done only with a recap at the
     requested grain and (when video is wanted) a non-wiped video."""
@@ -962,6 +1022,7 @@ def test_auto_enable_starts_run_and_persists(client, stub_pipeline, data):
                 "instruction": "auto marker",
                 "skip_preflight": True,
                 "video_mode": "scroll",
+                "fps": None,
                 "chapters": None,
                 "all_chapters": False,
             },
@@ -1059,6 +1120,42 @@ def test_auto_video_mode_invalid_422(client):
     assert resp.status_code == 422
 
 
+def test_auto_fps_invalid_422(client):
+    """fps is validated like video_mode: a non-positive rate is rejected up
+    front rather than failing mid-run."""
+    resp = client.put("/api/works/s1/auto", json={
+        "enabled": True, "fps": 0,
+    })
+    assert resp.status_code == 422
+    assert "fps" in resp.json()["detail"]
+
+
+def test_auto_fps_round_trips(client, stub_pipeline, data):
+    """fps is stored with the toggle like video_mode and reaches the runs it
+    starts; a backend restart reloads it from auto.json."""
+    resp = client.put("/api/works/s1/auto", json={
+        "enabled": True, "video_mode": "frame-animation", "fps": 4.0,
+        "skip_preflight": True,
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["run"]["options"]["video_mode"] == "frame-animation"
+    assert body["run"]["options"]["fps"] == 4.0
+    run = _wait_for_status(client, body["run"]["id"])
+    assert run["status"] == "done"
+    stored = json.loads((data / "auto.json").read_text())["s1"]["options"]
+    assert stored["video_mode"] == "frame-animation"
+    assert stored["fps"] == 4.0
+
+    restarted = TestClient(create_app())
+    entry = restarted.app.state.auto.snapshot()["s1"]
+    assert entry["options"]["fps"] == 4.0
+
+    # Leave the toggle off so the armed supervisor's recheck/poll timers go
+    # inert instead of firing into a later test's data dir.
+    client.put("/api/works/s1/auto", json={"enabled": False})
+
+
 def test_auto_enable_nothing_unfinished(all_done, data):
     """A fully-done work has nothing to process: enabling persists the
     toggle but starts no run."""
@@ -1093,6 +1190,10 @@ def test_auto_no_resume_after_restart(client, data, stub_pipeline):
         "enabled": True, "skip_preflight": True,
     })
     assert resp.json()["run"] is not None  # re-toggling re-arms + starts
+    # Wait the run out and switch the toggle off: a live run or an armed
+    # supervisor at teardown would leak inserts into a later test's data dir.
+    _wait_for_status(restarted, resp.json()["run"]["id"])
+    restarted.put("/api/works/s1/auto", json={"enabled": False})
 
 
 def test_auto_state_survives_restart(all_done, data):

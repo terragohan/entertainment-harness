@@ -47,6 +47,7 @@ from entertainment_harness.video.panels import extract_chapter_panels, load_pane
 from entertainment_harness.video.regions import DEFAULT_PADDING, _expand
 from entertainment_harness.video.script import (
     SCRIPT_ATTEMPTS,
+    SCRIPT_GUIDANCE_PLAIN,
     Segment,
     VideoError,
     split_long_segments,
@@ -115,7 +116,7 @@ Group ADJACENT panels into narration beats for the video: each group becomes one
 Rules:
 - Every panel appears in exactly one group, in order — the groups partition the list. Never skip, reorder, or repeat a panel.
 - Most groups hold 1-3 panels; a panel carrying a big moment may stand alone.
-- "text" is ONE spoken sentence (two at most), present tense, retelling what the group's panels show — actions, dialogue, reactions. Plain spoken English; no panel numbers, no "the panel shows", no headers.
+- "text" is ONE spoken sentence (two at most), present tense, retelling what the group's panels show — actions, dialogue, reactions. {guidance}; no panel numbers, no "the panel shows", no headers.
 - Only events and names visible in the descriptions above; no outside knowledge of any manga or anime.
 - "moment" is a 1-3 word label for the story beat; reuse the same label for consecutive groups in the same scene.
 {direction}{feedback}
@@ -206,6 +207,7 @@ def group_beats(
     chapter_num: float,
     instruction: str = "",
     feedback: str = "",
+    guidance: str = SCRIPT_GUIDANCE_PLAIN,
     max_attempts: int = SCRIPT_ATTEMPTS,
     log: Callable[[str], None] = lambda m: None,
 ) -> list[dict]:
@@ -219,6 +221,7 @@ def group_beats(
         ),
         direction=user_direction_block(instruction),
         feedback=feedback,
+        guidance=guidance,
     )
     last_error: VideoError | None = None
     for attempt in range(1, max_attempts + 1):
@@ -316,16 +319,20 @@ def segments_from_groups(groups: list[dict], beats: list[Beat]) -> list[Segment]
 # --- Cache (panelfirst.json next to chapter.json, keyed by beat sequence) ---
 
 
-def _cache_key(beats: list[Beat], instruction: str) -> str:
+def _cache_key(beats: list[Beat], instruction: str, guidance: str) -> str:
     """Content key for a cached grouping: the beat sequence (page +
-    description per beat) and the steering instruction. Panel BOXES are
-    deliberately excluded — groups are {"from","to"} indices, so fresher
-    boxes apply at segment build time without regrouping."""
+    description per beat), the steering instruction, and the delivery
+    guidance (a drama-engine regroup rewrites the lines, so it must not
+    reuse a plain grouping). Panel BOXES are deliberately excluded —
+    groups are {"from","to"} indices, so fresher boxes apply at segment
+    build time without regrouping."""
     h = hashlib.sha1()
     for beat in beats:
         h.update(f"{beat.page}\x00{beat.description}\n".encode("utf-8"))
     h.update(b"\x00instruction\x00")
     h.update(instruction.encode("utf-8"))
+    h.update(b"\x00guidance\x00")
+    h.update(guidance.encode("utf-8"))
     return h.hexdigest()
 
 
@@ -380,6 +387,7 @@ def build_panel_first_script(
     chapter,
     *,
     instruction: str = "",
+    guidance: str = SCRIPT_GUIDANCE_PLAIN,
     max_attempts: int = MAX_ATTEMPTS,
     vision_verify: bool = False,
     log: Callable[[str], None] = lambda m: None,
@@ -410,7 +418,7 @@ def build_panel_first_script(
             f"Chapter {chapter_num:g}: panel-first found no panels to narrate"
             " — run 'eh recap' first so the pages are cached."
         )
-    key = _cache_key(beats, instruction)
+    key = _cache_key(beats, instruction, guidance)
     groups = _load_groups(series["id"], chapter["id"], key, len(beats))
     if groups is not None:
         status = "cached"
@@ -419,7 +427,8 @@ def build_panel_first_script(
             return group_beats(
                 text.adapter, text.info.name, beats,
                 title=title, chapter_num=chapter_num,
-                instruction=instruction, feedback=feedback, log=log,
+                instruction=instruction, feedback=feedback,
+                guidance=guidance, log=log,
             )
 
         if judge is None:

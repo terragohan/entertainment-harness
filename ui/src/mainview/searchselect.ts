@@ -8,6 +8,7 @@
  *     className: "video-mode-select",
  *     items: [{ value, label, description }, ...],
  *     value: "kenburns",
+ *     onChange: (v) => ..., // optional; fires when the value actually changes
  *   });
  *   mount(picker.root); picker.value; picker.value = "scroll";
  *
@@ -34,6 +35,7 @@ export function searchSelect(opts: {
 	items: SearchSelectItem[];
 	value: string;
 	placeholder?: string;
+	onChange?: (value: string) => void;
 }): SearchSelect {
 	let value = opts.value;
 	let open = false;
@@ -161,9 +163,11 @@ export function searchSelect(opts: {
 		const btn = (e.target as HTMLElement).closest?.("[data-value]");
 		const picked = btn?.getAttribute("data-value");
 		if (!picked) return;
+		const changed = picked !== value;
 		value = picked;
 		setOpen(false);
 		renderList("");
+		if (changed) opts.onChange?.(picked);
 	});
 
 	syncToggle();
@@ -175,9 +179,11 @@ export function searchSelect(opts: {
 			return value;
 		},
 		set value(v: string) {
+			const changed = v !== value;
 			value = v;
 			syncToggle();
 			if (open) renderList((search as HTMLInputElement).value);
+			if (changed) opts.onChange?.(v);
 		},
 	};
 }

@@ -206,3 +206,37 @@ def test_pull_video_restores_narration_subdir(root, monkeypatch):
     assert (
         works.video_narration_dir("s1", "ch-1") / "out.mp4"
     ).read_bytes() == b"narration-video"
+
+
+def test_pull_video_reconciles_into_slug_named_work(root, monkeypatch):
+    """Regression (C3 gate, 2026-10-17): the local work dir is slug-named
+    (the steady state after any connect()); a store pull lands in the
+    id-named layout, and without reconcile eh play checks the slug path it
+    resolved before the pull and reports the file missing even though the
+    restore succeeded."""
+    from entertainment_harness.library import works
+
+    works.write_work_metadata(works.WorkMetadata(
+        id="s1", title="Demo Work", source="mangadex", source_id="x",
+        added_at="2026-01-01",
+    ))
+    works.write_chapter_metadata("s1", works.ChapterMetadata(
+        id="c1", chapter_num=1, title=None, lang="en", pages=1,
+        published_at=None, fetched_at="2026-01-01",
+    ))
+    slug_chapter = works.chapter_dir("s1", "c1")
+    assert slug_chapter.name != "c1"  # the local layout is slug-named
+
+    _fake_client(
+        monkeypatch,
+        {"works/s1/chapters/c1/video-narration/out.mp4": b"restored-video"},
+    )
+    restored = store.pull_video(_config(), "s1", "c1")
+    assert [p.name for p in restored] == ["out.mp4"]
+    # The file lands in the slug-named dir the resolver checks, and the
+    # duplicate id-named tree is pruned (otherwise the next connect()
+    # would rename it to a second slug dir).
+    assert (slug_chapter / "video-narration" / "out.mp4").read_bytes() \
+        == b"restored-video"
+    assert not (root / "works" / "s1").exists()
+    assert works.chapter_dir("s1", "c1") == slug_chapter

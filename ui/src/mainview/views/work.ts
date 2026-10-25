@@ -358,6 +358,17 @@ export async function renderWork(
 		work.kind === "book" && defaultVideoMode === "kenburns"
 			? "cards"
 			: defaultVideoMode;
+	// Frame rate for the frame-animation style (same as `eh recap --fps`):
+	// empty inherits [frame_animation] fps. Only that style reads it, so the
+	// input stays disabled for every other style.
+	const fpsInput = el("input", {
+		type: "number", class: "fps-input", placeholder: "fps",
+		min: "0", step: "any",
+		title:
+			"Generated frames per second of slot share (frame-animation style" +
+			" only); empty = [frame_animation] fps from config",
+	}) as HTMLInputElement;
+	fpsInput.disabled = initialVideoMode !== "frame-animation";
 	const videoModeSelect = searchSelect({
 		className: "video-mode-select",
 		items: VIDEO_MODES.map((m) => ({
@@ -367,6 +378,9 @@ export async function renderWork(
 		})),
 		value: initialVideoMode,
 		placeholder: "Search styles…",
+		onChange: (mode) => {
+			fpsInput.disabled = mode !== "frame-animation";
+		},
 	});
 	// Optional scope for the toggle: both boxes empty (and "all" off) =
 	// the default pending selection — from the read mark onward, gaps
@@ -426,6 +440,12 @@ export async function renderWork(
 		}
 		const single = Number.isNaN(from) ? to : from;
 		return { chapters: `${single}`, all_chapters: false };
+	}
+	// Empty (or disabled — a non-frame-animation style) = inherit the config.
+	function fpsPayload(): number | null {
+		if (fpsInput.disabled) return null;
+		const parsed = parseFloat(fpsInput.value);
+		return Number.isNaN(parsed) ? null : parsed;
 	}
 	// The auto-process toggle IS the run control: on, the backend keeps
 	// processing the work's unfinished chapters (no recap at the selected
@@ -564,6 +584,7 @@ export async function renderWork(
 				detailSelect,
 				el("span", { class: "muted" }, "style"),
 				videoModeSelect.root,
+				fpsInput,
 				el("span", { class: "muted" }, "chapters"),
 				fromInput,
 				el("span", { class: "muted" }, "–"),
@@ -586,7 +607,7 @@ export async function renderWork(
 			el(
 				"p",
 				{ class: "muted", style: "font-size:12px;margin:8px 0 0" },
-				"Chapter range is optional: empty (or \"all\") starts from the read mark, with chapters that have neither recap nor video filled in even behind it; a range or \"all\" limits processing to those chapters — still only the unfinished ones. Every processed chapter gets its video. Detail, style, instructions, and pre-flight are stored with the toggle and used by each run. The instruction box starts with a default steering direction — edit or clear it per work.",
+				"Chapter range is optional: empty (or \"all\") starts from the read mark, with chapters that have neither recap nor video filled in even behind it; a range or \"all\" limits processing to those chapters — still only the unfinished ones. Every processed chapter gets its video. Detail, style, fps (frame-animation style), instructions, and pre-flight are stored with the toggle and used by each run. The instruction box starts with a default steering direction — edit or clear it per work.",
 			),
 			bgNote,
 			autoLine,
@@ -720,6 +741,7 @@ export async function renderWork(
 				enabled,
 				detail: detailSelect.value,
 				video_mode: videoModeSelect.value,
+				fps: fpsPayload(),
 				instruction: instructionInput.value.trim() || null,
 				skip_preflight: skipPreflight.checked,
 				...scopePayload(),

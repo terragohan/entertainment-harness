@@ -300,6 +300,23 @@ try {
 		videoMode.querySelector(".ss-toggle-label").textContent === "scroll",
 		"picking a style updates the picker",
 	);
+	// fps input: only the frame-animation style reads a frame rate, so the
+	// input stays disabled for every other style.
+	const fpsInput = container.querySelector(".fps-input") as any;
+	ok(!!fpsInput, "run panel has an fps input");
+	ok(
+		fpsInput.disabled === true,
+		"fps input is disabled for non-frame-animation styles",
+	);
+	videoMode.querySelector(".ss-toggle").click();
+	(Array.from(videoMode.querySelectorAll(".ss-item")) as any[])
+		.find((i) => i.getAttribute("data-value") === "frame-animation")
+		.click();
+	ok(
+		fpsInput.disabled === false,
+		"fps input enables for the frame-animation style",
+	);
+	fpsInput.value = "4";
 	const skipBox = container.querySelector(".skip-preflight-input") as any;
 	ok(!!skipBox, "run panel has the skip-preflight checkbox");
 	skipBox.checked = true;
@@ -321,6 +338,15 @@ try {
 		await sleep(100);
 	}
 	ok(true, "toggling on enables auto-processing (library payload)");
+	// The UI toggle's PUT carried the picked style and the fps override.
+	const uiStored = JSON.parse(
+		readFileSync(path.join(DATA_DIR, "auto.json"), "utf8"),
+	)[habits.id];
+	ok(
+		uiStored?.options?.video_mode === "frame-animation" &&
+			uiStored?.options?.fps === 4,
+		"UI toggle payload carries the fps override (auto.json)",
+	);
 	const idleLine = Array.from(container.querySelectorAll(".run-panel p.muted")).find((p: any) =>
 		(p.textContent ?? "").includes("nothing to do right now"),
 	) as any;
@@ -464,10 +490,55 @@ try {
 	const keyInputs = Array.from(
 		container.querySelectorAll(".settings-group input[type=password]"),
 	) as any[];
-	ok(keyInputs.length === 4, "API keys panel renders 4 password inputs");
+	ok(keyInputs.length === 6, "API keys panel renders 6 password inputs");
 	ok(
 		keyInputs.every((i) => i.value === ""),
 		"API key inputs are never prefilled",
+	);
+	const fishKeyRow = keyInputs.find(
+		(i) =>
+			(i.closest(".field-row")?.querySelector("label")?.textContent ?? "") ===
+			"Fish Audio API key",
+	);
+	ok(!!fishKeyRow, "Fish Audio key renders as a secret in the API keys panel");
+	const fishRows = Array.from(
+		container.querySelectorAll(".settings-group .field-row"),
+	).filter(
+		(r: any) =>
+			(r.querySelector("label")?.textContent ?? "") === "Fish Audio API key",
+	);
+	ok(fishRows.length === 1, "Fish Audio key renders exactly once");
+	const fishSubsection = Array.from(
+		container.querySelectorAll(".settings-subsection"),
+	).find((f: any) => f.querySelector("legend")?.textContent === "fish");
+	ok(!!fishSubsection, "tts.fish renders as a subsection under Video");
+	ok(
+		!(
+			fishSubsection as HTMLElement | undefined
+		)?.textContent?.includes("sk-fish-dev-dummy"),
+		"the fish subsection never shows the key as plaintext",
+	);
+	const cloudTokenRow = keyInputs.find(
+		(i) =>
+			(i.closest(".field-row")?.querySelector("label")?.textContent ?? "") ===
+			"Cloud worker token",
+	);
+	ok(!!cloudTokenRow, "Cloud worker token renders as a secret in the API keys panel");
+	const cloudTokenRows = Array.from(
+		container.querySelectorAll(".settings-group .field-row"),
+	).filter(
+		(r: any) =>
+			(r.querySelector("label")?.textContent ?? "") === "Cloud worker token",
+	);
+	ok(cloudTokenRows.length === 1, "Cloud worker token renders exactly once");
+	const cloudSubsection = Array.from(
+		container.querySelectorAll(".settings-subsection"),
+	).find((f: any) => f.querySelector("legend")?.textContent === "cloud");
+	ok(
+		!(cloudSubsection as HTMLElement | undefined)?.textContent?.includes(
+			"eh-dev-dummy-tok",
+		),
+		"the cloud subsection never shows the token as plaintext",
 	);
 	ok(!groupHeadings.includes("raw"), "settings hides the raw config table");
 	const jobSelect = Array.from(
@@ -500,10 +571,86 @@ try {
 		optionsOf("Frame animation provider").includes("openrouter-frame-animation"),
 		"frame-animation provider select offers openrouter-frame-animation",
 	);
+	const ttsEngineOptions = optionsOf("TTS engine");
+	for (const engine of ["fish", "kokoro", "say", "qwen3"]) {
+		ok(
+			ttsEngineOptions.includes(engine),
+			`TTS engine select offers ${engine}`,
+		);
+	}
 	const jsonBlobs = Array.from(
 		container.querySelectorAll(".settings-group input[type=text]"),
 	).filter((i: any) => i.value.startsWith('{"'));
 	ok(jsonBlobs.length === 0, "no raw-JSON inputs remain on the settings view");
+
+	// Settings search: filters fields by label/path/help and collapses groups
+	const searchInput = container.querySelector(
+		".settings-search",
+	) as HTMLInputElement;
+	ok(!!searchInput, "settings search box renders");
+	const fireSearch = () =>
+		searchInput.dispatchEvent(
+			new (document.defaultView?.Event ?? Event)("input"),
+		);
+	const groupRows = () =>
+		Array.from(
+			container.querySelectorAll(".settings-group .field-row"),
+		) as HTMLElement[];
+	const totalRows = groupRows().length;
+	searchInput.value = "runway";
+	fireSearch();
+	const visible = groupRows().filter((r) => !r.hidden);
+	ok(
+		visible.length > 0 && visible.length < totalRows,
+		`search filters settings rows (${visible.length}/${totalRows} for "runway")`,
+	);
+	ok(
+		visible.every((r) => r.classList.contains("search-hit")),
+		"search highlights matching rows",
+	);
+	ok(
+		visible.every(
+			(r) =>
+				r.textContent?.toLowerCase().includes("runway") ||
+				(
+					r
+						.querySelector("label")
+						?.getAttribute("title")
+						?.toLowerCase() ?? ""
+				).includes("runway"),
+		),
+		"search matches on label, path, or help text",
+	);
+	ok(
+		(container.querySelector(".settings-search-info") as HTMLElement)
+			?.textContent.includes("match"),
+		"search reports a match count",
+	);
+	ok(
+		Array.from(
+			container.querySelectorAll(".settings-group:not([hidden])"),
+		).every((g) =>
+			g.querySelector(".field-row:not([hidden])"),
+		),
+		"visible groups all contain a visible field",
+	);
+	searchInput.value = "zzz-no-such-setting";
+	fireSearch();
+	ok(
+		(container.querySelector(".settings-search-info") as HTMLElement)
+			?.textContent === "no matches",
+		"search reports no matches",
+	);
+	ok(
+		container.querySelectorAll(".settings-group:not([hidden])").length === 0,
+		"all groups collapse when nothing matches",
+	);
+	searchInput.value = "";
+	fireSearch();
+	ok(
+		groupRows().every((r) => !r.hidden),
+		"clearing the search restores every row",
+	);
 
 	// Phase 5: /api/runs exposes the per-run `current` stage cursor, and the
 	// nav indicator renders it. The no-op run above already finished; start
@@ -513,8 +660,10 @@ try {
 		all_chapters: true,
 		video: true,
 		skip_preflight: true,
+		fps: 4,
 	});
 	ok("current" in run5, "POST /api/runs payload exposes the current field");
+	ok(run5.options.fps === 4, "POST /api/runs echoes the fps override in options");
 	const deadline5 = Date.now() + 15_000;
 	let caught: (typeof run5) | null = null;
 	while (Date.now() < deadline5) {

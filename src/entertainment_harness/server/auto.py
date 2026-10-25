@@ -24,7 +24,8 @@ read frontier with no artifact and no usable video included) plus recapped
 chapters lacking a playable video (`_chapters_missing_video`, the `--video`
 backfill set). Runs are started with the default (scope-less) selection —
 that IS the gap-aware pending set — plus `video=True` and the modifiers
-stored with the toggle (detail, instruction, skip_preflight, video_mode).
+stored with the toggle (detail, instruction, skip_preflight, video_mode,
+fps).
 
 The toggle can also carry an optional scope: a `--chapters`-style spec or
 `all_chapters`. Scoped runs select exactly that scope with `skip_done=True`,
@@ -106,6 +107,7 @@ class AutoSupervisor:
                             entry.get("options", {}).get("skip_preflight")
                         ),
                         "video_mode": entry.get("options", {}).get("video_mode"),
+                        "fps": entry.get("options", {}).get("fps"),
                         "chapters": entry.get("options", {}).get("chapters"),
                         "all_chapters": bool(
                             entry.get("options", {}).get("all_chapters")
@@ -166,6 +168,7 @@ class AutoSupervisor:
                     "instruction": options.get("instruction"),
                     "skip_preflight": bool(options.get("skip_preflight")),
                     "video_mode": options.get("video_mode"),
+                    "fps": options.get("fps"),
                     "chapters": options.get("chapters"),
                     "all_chapters": bool(options.get("all_chapters")),
                 },
@@ -202,6 +205,18 @@ class AutoSupervisor:
                     if latest is not None and latest.status == "error":
                         entry["enabled"] = False
                         self._persist()
+                        continue
+                    if (
+                        latest is not None
+                        and getattr(self.runs, "one_shot_runs", False)
+                        and latest.status in ("done", "cancelled")
+                    ):
+                        # Remote (cloud) runs are one-shot per arming: the
+                        # job's truth is the D1 index in the cloud, so the
+                        # local "unfinished" check must not re-submit after
+                        # a terminal job. Disarm; the user re-arms by
+                        # toggling (same as after a restart).
+                        entry["armed"] = False
                         continue
                     if self._active_run(work_id) is not None:
                         continue
@@ -246,11 +261,13 @@ class AutoSupervisor:
         return next((r for r in self.runs.list() if r.work == work_id), None)
 
     def _active_run(self, work_id: str):
+        # "queued" appears only for remote (cloud) runs; locally a run is
+        # running the moment it exists.
         return next(
             (
                 r
                 for r in self.runs.list()
-                if r.work == work_id and r.status == "running"
+                if r.work == work_id and r.status in ("running", "queued")
             ),
             None,
         )
@@ -286,6 +303,7 @@ class AutoSupervisor:
                 instruction=options["instruction"],
                 skip_preflight=options["skip_preflight"],
                 video_mode=options.get("video_mode"),
+                fps=options.get("fps"),
             ),
         )
         self._recheck_soon()

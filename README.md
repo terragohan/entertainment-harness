@@ -22,7 +22,7 @@ app for macOS (Apple silicon).
 ## Demo
 
 A **Kenja no Mago** chapter 0 recap, generated end-to-end by the pipeline:
-vision-model recap → Kokoro TTS narration → Ken Burns motion over the real
+vision-model recap → Fish Audio narration → Ken Burns motion over the real
 pages. Click the preview for the full clip (with narration):
 
 <p align="center">
@@ -68,8 +68,9 @@ cd ui && EH_DATA_DIR=/tmp/eh-demo-data bun run dev
   (gist → full, full = complete narration) with rolling series context and
   an automatically maintained character registry (`eh cast`), so names stay
   consistent across chapters.
-- **Recap videos** — TTS narration over the real chapter pages. Kokoro
-  voices built in; macOS `say`; optional voice cloning via mlx-audio.
+- **Recap videos** — TTS narration over the real chapter pages. Fish
+  Audio's drama engine by default (cloud API, free dev tier); local Kokoro
+  voices; macOS `say`; optional voice cloning via mlx-audio.
 - **Eight video modes** — from classic Ken Burns to AI frame-by-frame
   animation (see [Video modes](#video-modes)).
 - **Manga → anime scenes** — guided storyboard → keyframes and short shots
@@ -92,7 +93,7 @@ cd ui && EH_DATA_DIR=/tmp/eh-demo-data bun run dev
                                       ▼
                               chapter artifact ──► video script (beats)
                                       │                │
-                                      │                ├─► Kokoro TTS per beat
+                                      │                ├─► Fish Audio TTS per beat
                                       │                ▼
                                       └────► assembly: clips → out.mp4
                                              (mode-dependent visuals)
@@ -252,10 +253,12 @@ any OpenRouter image model — configured in `[frames]` / `[sequence]`
 
 ### Voices
 
-`[video] tts_engine =` `kokoro` (default; `voice = "af_heart"`, dozens of
-built-in voices), `say` (any macOS system voice), or `qwen3` (voice cloning
-from a reference sample — `uv sync --extra qwen3`, manage with
-`eh voices`).
+`[video] tts_engine =` `fish` (default; Fish Audio cloud API, `drama-3`
+dramatic narration — free dev tier, key from fish.audio or the
+`FISH_AUDIO_API_KEY` env var), `kokoro` (local; `voice = "af_heart"`,
+dozens of built-in voices), `say` (any macOS system voice), or `qwen3`
+(voice cloning from a reference sample — `uv sync --extra qwen3`, manage
+with `eh voices`).
 
 ## CLI tour
 
@@ -336,8 +339,11 @@ recommended for the desktop app. Remote backends (OpenRouter) need no local
 model hardware at all.
 
 **Do I need API keys?**
-Not for the default path (Ollama + Kokoro, all local). Keys are only for
-opt-in features: OpenRouter models, Runway video generation, cloud store.
+One: the default narrator is Fish Audio's cloud API (free dev tier at
+fish.audio; `FISH_AUDIO_API_KEY` or `[tts.fish] api_key`) — switch
+`[video] tts_engine = "kokoro"` for an all-local path (Ollama + Kokoro,
+no keys at all). Keys are otherwise only for opt-in features: OpenRouter
+models, Runway video generation, cloud store.
 
 **Does it work for text books?**
 Yes — import EPUBs and the video uses `cards` mode (generated caption
@@ -389,7 +395,8 @@ authors; check those licenses before using outputs commercially.
 
 ## Credits
 
-Built on [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) (TTS),
+Built on [Fish Audio](https://fish.audio) (narration TTS),
+[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (local TTS),
 [Ollama](https://ollama.com) (local models), Qwen3-VL / LFM2.5-VL (vision),
 [DDColor](https://github.com/piddnad/DDColor) (colorization), Segment
 Anything (panel detection), [Electrobun](https://github.com/blackboardsh/electrobun)

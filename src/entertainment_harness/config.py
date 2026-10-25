@@ -28,6 +28,16 @@ CACHE_DIR_ENV = "EH_CACHE_DIR"
 DEFAULT_DATA_DIR = Path.home() / ".local" / "share" / "entertainment-harness"
 CONFIG_FILENAME = "config.toml"
 
+# Cloud execution profile (animation-director Track B): when EH_CLOUD is
+# set, load_config() returns the cloud profile — remote model roles and the
+# R2 store, local-only hardware guards off. Containers have no Ollama/GPU,
+# so every role resolves through the openai_compat backend.
+CLOUD_ENV = "EH_CLOUD"
+CLOUD_VISION_MODEL_ENV = "EH_CLOUD_VISION_MODEL"
+CLOUD_TEXT_MODEL_ENV = "EH_CLOUD_TEXT_MODEL"
+DEFAULT_CLOUD_VISION_MODEL = "qwen/qwen3-vl-235b-a22b-instruct"
+DEFAULT_CLOUD_TEXT_MODEL = "qwen/qwen3-32b"
+
 # Built-in content sources enabled by default (see SourcesConfig).
 DEFAULT_ENABLED_SOURCES = ["mangadex", "weebcentral"]
 
@@ -142,8 +152,8 @@ class PreflightConfig:
 
 @dataclass
 class VideoConfig:
-    tts_engine: str = "kokoro"  # "kokoro", "say", or "qwen3" (voice cloning)
-    voice: str = "af_heart"  # engine-specific voice id
+    tts_engine: str = "fish"  # "fish" (Fish Audio API, default), "kokoro", "say", or "qwen3" (voice cloning)
+    voice: str = ""  # engine-specific voice id ("" = the engine's default voice)
     resolution: str = "1920x1080"
     # Presentation style: "kenburns" (per-page pan/zoom), "scroll" (viewport
     # descends a per-segment page strip), "slideshow" (still pages dissolving
@@ -251,6 +261,26 @@ class StoreConfig:
 
 
 @dataclass
+class CloudConfig:
+    """Cloud execution (Track B): submit jobs to the deployed Cloudflare
+    Worker instead of running pipelines locally. The submit token is read
+    from `token` (editable in the settings UI) with the EH_CLOUD_TOKEN env
+    var as fallback — the same pattern as the other API keys."""
+
+    enabled: bool = False
+    worker_url: str = ""  # https://<worker>.<account>.workers.dev
+    account_id: str = ""
+    database_id: str = ""
+    max_job_seconds: int = 1800  # cost cap enforced by the queue consumer
+    token: str = ""  # bearer token; EH_CLOUD_TOKEN env var is the fallback
+
+    @property
+    def resolved_token(self) -> str:
+        """The bearer token: the config value wins, the env var fills in."""
+        return self.token or os.environ.get("EH_CLOUD_TOKEN", "")
+
+
+@dataclass
 class LibraryConfig:
     # Languages the user is happy to read / recap in. The first language is
     # the default translation target for `eh recap --translated`.
@@ -305,6 +335,7 @@ class Config:
     frame_animation: FrameAnimationConfig = field(default_factory=FrameAnimationConfig)
     anime: AnimeConfig = field(default_factory=AnimeConfig)
     store: StoreConfig = field(default_factory=StoreConfig)
+    cloud: CloudConfig = field(default_factory=CloudConfig)
     library: LibraryConfig = field(default_factory=LibraryConfig)
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
     preflight: PreflightConfig = field(default_factory=PreflightConfig)
@@ -353,11 +384,59 @@ class ConfigError(ValueError):
 def load_config(path: Path | None = None) -> Config:
     config_path = path if path is not None else data_dir() / CONFIG_FILENAME
     if not config_path.exists():
-        return Config()
+        config = Config()
+    else:
+        with config_path.open("rb") as fh:
+            raw = tomllib.load(fh)
+        config = parse_config(raw)
+    if os.environ.get(CLOUD_ENV, "").lower() in ("1", "true", "yes"):
+        apply_cloud_profile(config)
+    return config
 
-    with config_path.open("rb") as fh:
-        raw = tomllib.load(fh)
-    return parse_config(raw)
+
+def cloud_mode() -> bool:
+    """Whether the cloud execution profile is active (EH_CLOUD set)."""
+    return os.environ.get(CLOUD_ENV, "").lower() in ("1", "true", "yes")
+
+
+def apply_cloud_profile(config: Config) -> Config:
+    """Force the cloud execution profile onto a loaded config.
+
+    Containers are CPU-only with no Ollama: vision/text roles bind to the
+    openai_compat backend (models overridable via EH_CLOUD_VISION_MODEL /
+    EH_CLOUD_TEXT_MODEL; translation/judge fall back to the text role per
+    models/roles.py). The R2 store is selected (bucket/account/keys fall
+    back to R2_* env vars in store/r2.py), and the local-hardware pre-flight
+    guard is disabled — resource checks are meaningless off-machine. The
+    default fish narrator needs the FISH_AUDIO_API_KEY the Worker injects as
+    a secret; when that secret is absent, video jobs fall back to in-
+    container Kokoro rather than failing at narration. Likewise the default
+    frame-animation animator is Runway-backed: with no resolvable Runway key
+    ([video_gen.runway] api_key or RUNWAY_API_KEY), frame-animation jobs
+    fall back to the OpenRouter image endpoint the container already has a
+    key for. An explicit [frame_animation] provider choice is respected.
+    """
+    config.roles["vision"] = ModelRoleConfig(
+        backend="openai_compat",
+        model=os.environ.get(CLOUD_VISION_MODEL_ENV, DEFAULT_CLOUD_VISION_MODEL),
+    )
+    config.roles["text"] = ModelRoleConfig(
+        backend="openai_compat",
+        model=os.environ.get(CLOUD_TEXT_MODEL_ENV, DEFAULT_CLOUD_TEXT_MODEL),
+    )
+    config.store.provider = "r2"
+    config.preflight.enabled = False
+    if config.video.tts_engine == "fish" and not os.environ.get(
+        "FISH_AUDIO_API_KEY"
+    ):
+        config.video.tts_engine = "kokoro"
+    if (
+        config.frame_animation.provider == "frame-animation"
+        and not config.video_gen.runway.api_key
+        and not os.environ.get("RUNWAY_API_KEY")
+    ):
+        config.frame_animation.provider = "openrouter-frame-animation"
+    return config
 
 
 def parse_config(raw: dict) -> Config:
@@ -417,8 +496,8 @@ def parse_config(raw: dict) -> Config:
             config.jobs.scanlation[name] = _scanlation_job_config(job_data)
 
     video = raw.get("video", {})
-    config.video.tts_engine = video.get("tts_engine", "kokoro")
-    config.video.voice = video.get("voice", "af_heart")
+    config.video.tts_engine = video.get("tts_engine", "fish")
+    config.video.voice = video.get("voice", "")
     config.video.resolution = video.get("resolution", "1920x1080")
     config.video.mode = str(video.get("mode", "kenburns"))
     config.video.colorize = bool(video.get("colorize", False))
@@ -476,6 +555,14 @@ def parse_config(raw: dict) -> Config:
     config.store.r2.account_id = str(r2.get("account_id", ""))
     config.store.r2.access_key_id = str(r2.get("access_key_id", ""))
     config.store.r2.secret_access_key = str(r2.get("secret_access_key", ""))
+
+    cloud = raw.get("cloud", {})
+    config.cloud.enabled = bool(cloud.get("enabled", False))
+    config.cloud.worker_url = str(cloud.get("worker_url", ""))
+    config.cloud.account_id = str(cloud.get("account_id", ""))
+    config.cloud.database_id = str(cloud.get("database_id", ""))
+    config.cloud.max_job_seconds = int(cloud.get("max_job_seconds", 1800))
+    config.cloud.token = str(cloud.get("token", ""))
 
     library = raw.get("library", {})
     if "langs" in library:

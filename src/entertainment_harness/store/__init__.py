@@ -28,6 +28,7 @@ id-named layout and are reconciled into the local slug dirs.
 
 from __future__ import annotations
 
+import os
 import shutil
 import types
 from collections.abc import Callable
@@ -43,7 +44,8 @@ class StoreError(Exception):
     pass
 
 
-def _backend(config: Config) -> types.ModuleType:
+def backend(config: Config) -> types.ModuleType:
+    """Resolve the configured store backend module (upload/download)."""
     provider = config.store.provider
     if provider == "hf":
         from entertainment_harness.store import hf
@@ -62,7 +64,7 @@ def _backend(config: Config) -> types.ModuleType:
 def is_configured(config: Config) -> bool:
     """Whether a usable remote store is configured."""
     if config.store.provider == "r2":
-        return bool(config.store.r2.bucket)
+        return bool(config.store.r2.bucket or os.environ.get("R2_BUCKET"))
     return bool(config.store.repo)
 
 
@@ -102,7 +104,7 @@ def push_video(config: Config, series_id: str, chapter_key: str,
         raise StoreError(
             f"No rendered video to push for {series_id}/{chapter_key}."
         )
-    _backend(config).upload(
+    backend(config).upload(
         config,
         [(p, f"{prefix}{rel}") for p, rel in files],
         log,
@@ -119,7 +121,7 @@ def pull_video(config: Config, series_id: str, chapter_key: str) -> list[Path]:
         if chapter_key == "tiktok"
         else f"{VIDEO_PREFIX}/{series_id}/chapters/{chapter_key}/"
     )
-    _backend(config).download(config, prefix)
+    backend(config).download(config, prefix)
     _reconcile_landing(series_id, chapter_key)
     if chapter_key == "tiktok":
         return [p for p, _ in _collect_tiktok_mp4s(series_id)]
@@ -128,17 +130,44 @@ def pull_video(config: Config, series_id: str, chapter_key: str) -> list[Path]:
 
 def _reconcile_landing(series_id: str, chapter_key: str) -> None:
     """Move files pulled into the id-named remote layout over to the resolved
-    (possibly slug-named) local directories."""
-    landing = works.works_root() / series_id
-    if landing == works.work_dir(series_id) or not landing.is_dir():
+    local directories.
+
+    The download lands at works/<series-id>/... verbatim. When a local
+    (usually slug-named) work dir already holds this series' metadata, the
+    pulled tree is a duplicate: move the chapter/tiktok content into the
+    canonical dir — matching chapter dirs by chapter.json id — and prune the
+    landing tree. work_dir()/chapter_dir() resolve id-named dirs directly, so
+    without this the pull would be checked against the slug path and lost
+    (eh play's "Video file is missing" after a successful restore), and the
+    next connect() would rename the duplicate to a slug-2 dir."""
+    root = works.works_root()
+    landing = root / series_id
+    if not landing.is_dir():
         return
+    canonical = None
+    for d in root.iterdir():
+        if d.name == series_id or not d.is_dir():
+            continue
+        meta = works.read_work_metadata_at(d)
+        if meta is not None and meta.id == series_id:
+            canonical = d
+            break
+    if canonical is None:
+        return  # landing is the only home; resolution already points at it
     if chapter_key == "tiktok":
-        pairs = [(landing / works.TIKTOK_DIR, works.tiktok_dir(series_id))]
+        pairs = [(landing / works.TIKTOK_DIR, canonical / works.TIKTOK_DIR)]
     else:
-        pairs = [(
-            landing / "chapters" / chapter_key,
-            works.chapter_dir(series_id, chapter_key),
-        )]
+        chapters = canonical / "chapters"
+        target = chapters / chapter_key
+        if chapters.is_dir():
+            for d in chapters.iterdir():
+                if not d.is_dir():
+                    continue
+                cmeta = works.read_chapter_metadata_at(d)
+                if cmeta is not None and cmeta.id == chapter_key:
+                    target = d
+                    break
+        pairs = [(landing / "chapters" / chapter_key, target)]
     for src, dst in pairs:
         if not src.is_dir():
             continue
@@ -150,3 +179,4 @@ def _reconcile_landing(series_id: str, chapter_key: str) -> None:
     for d in (landing / "chapters", landing):
         if d.is_dir() and not any(d.iterdir()):
             d.rmdir()
+    works.refresh_paths()

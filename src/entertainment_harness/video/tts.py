@@ -1,7 +1,9 @@
 """Stage 2: narration. TTS engines register in the shared plugin registry
 (plugins.py): Kokoro-82M (default, via kokoro-onnx — no torch/spacy needed),
-macOS `say` (zero-dependency fallback), and Qwen3-TTS voice cloning via the
-optional `qwen3` extra (mlx-audio; voices registered with `eh voices`).
+macOS `say` (zero-dependency fallback), Fish Audio (hosted API — no local
+models, so it runs identically in cloud containers), and Qwen3-TTS voice
+cloning via the optional `qwen3` extra (mlx-audio; voices registered with
+`eh voices`).
 
 Audio timing is authoritative: segment durations are read back from the
 rendered WAV files, and the visuals/assembly stages conform to them.
@@ -19,9 +21,14 @@ from typing import Protocol
 
 import httpx
 
-from entertainment_harness.config import Config, cache_dir
+from entertainment_harness.config import Config, cache_dir, data_dir
 from entertainment_harness.plugins import ENTRY_POINT_GROUPS, PluginRegistry
-from entertainment_harness.video.script import Segment, VideoError
+from entertainment_harness.video.script import (
+    SCRIPT_GUIDANCE_DRAMA,
+    SCRIPT_GUIDANCE_PLAIN,
+    Segment,
+    VideoError,
+)
 
 def _espeak_data_path() -> str | None:
     """espeak-ng stores the data path in a fixed ~160-byte buffer; a longer
@@ -71,11 +78,11 @@ class TTSEngine(Protocol):
     name: str
     default_voice: str
     capabilities: frozenset[str]  # e.g. {"tts"}, {"tts", "voice-clone"}
+    script_guidance: str  # how the script prompts phrase the delivery
 
     def synthesize(self, text: str, voice: str, dest: Path) -> None:
         """Render text to a WAV file at dest."""
         ...
-
 
 class SayEngine:
     """macOS `say` — always available on a Mac, no downloads."""
@@ -83,6 +90,7 @@ class SayEngine:
     name = "say"
     default_voice = "Samantha"
     capabilities = frozenset({"tts"})
+    script_guidance = SCRIPT_GUIDANCE_PLAIN
 
     def __init__(self, config: Config | None = None) -> None:
         pass  # contract: (config, **overrides); no [tts.say] section yet
@@ -111,6 +119,7 @@ class KokoroEngine:
     name = "kokoro"
     default_voice = "af_heart"
     capabilities = frozenset({"tts"})
+    script_guidance = SCRIPT_GUIDANCE_PLAIN
 
     def __init__(
         self, config: Config | None = None, models_dir: Path | None = None
@@ -180,9 +189,89 @@ class KokoroEngine:
             wav.writeframes(pcm.tobytes())
 
 
+class FishEngine:
+    """Fish Audio (api.fish.audio) hosted TTS: one HTTPS call per segment,
+    WAV back. No local models or espeak, so it runs identically on a Mac and
+    in a cloud container (the Worker injects the key there). The API key
+    comes from [tts.fish] api_key or the FISH_AUDIO_API_KEY env var; `voice`
+    is a Fish voice-model reference id (empty = the model's built-in voice).
+    Model ids: s1, s2-pro, s2.1-pro, s2.1-pro-free (dev tier), drama-3
+    (default — dramatic storytelling; its delivery guidance also steers the
+    script prompts). Billed per UTF-8 byte of input text."""
+
+    name = "fish"
+    default_voice = ""  # no reference id = the model's built-in voice
+    capabilities = frozenset({"tts"})
+
+    def __init__(
+        self,
+        config: Config | None = None,
+        api_key: str = "",
+        model: str = "drama-3",
+        base_url: str = "https://api.fish.audio",
+        sample_rate: int = 44100,
+    ) -> None:
+        self._api_key = api_key or os.environ.get("FISH_AUDIO_API_KEY", "")
+        self._model = model
+        self._base = base_url.rstrip("/")
+        self._sample_rate = sample_rate
+        self.script_guidance = (
+            SCRIPT_GUIDANCE_DRAMA if model.startswith("drama")
+            else SCRIPT_GUIDANCE_PLAIN
+        )
+
+    def synthesize(self, text: str, voice: str, dest: Path) -> None:
+        if not self._api_key:
+            raise VideoError(
+                "fish TTS needs an API key: set api_key under [tts.fish] in"
+                f" {data_dir() / 'config.toml'}, or export FISH_AUDIO_API_KEY"
+                " (cloud: wrangler secret put FISH_AUDIO_API_KEY)."
+            )
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            # The model travels in its own header on this API.
+            "model": self._model,
+        }
+        body: dict = {
+            "text": text,
+            "format": "wav",  # PCM WAV so wav_duration can read it back
+            "sample_rate": self._sample_rate,
+        }
+        if voice:
+            body["reference_id"] = voice
+        try:
+            with httpx.stream(
+                "POST", f"{self._base}/v1/tts", headers=headers, json=body,
+                timeout=httpx.Timeout(60.0, connect=10.0),
+            ) as resp:
+                if resp.status_code != 200:
+                    resp.read()  # streaming response: buffer before parsing
+                    try:
+                        err = resp.json()
+                        detail = str(
+                            err.get("message") or err.get("reason") or err
+                        )
+                    except ValueError:
+                        detail = resp.text[:200]
+                    hint = " (check the API key)" if resp.status_code == 401 else ""
+                    raise VideoError(
+                        f"fish TTS failed with HTTP {resp.status_code}{hint}:"
+                        f" {detail}"
+                    )
+                with dest.open("wb") as fh:
+                    for chunk in resp.iter_bytes():
+                        fh.write(chunk)
+        except httpx.HTTPError as exc:
+            raise VideoError(f"fish TTS request failed: {exc}") from exc
+        if not dest.exists() or dest.stat().st_size == 0:
+            raise VideoError("fish TTS returned an empty audio stream")
+
+
 REGISTRY = PluginRegistry("tts", ENTRY_POINT_GROUPS["tts"])
 REGISTRY.register("kokoro", KokoroEngine)
 REGISTRY.register("say", SayEngine)
+REGISTRY.register("fish", FishEngine)
 # Lazy dotted string: keeps the mlx_audio import (qwen3 extra) out of CLI
 # startup; Qwen3TTSCloneEngine clones voices from the `eh voices` library.
 REGISTRY.register(

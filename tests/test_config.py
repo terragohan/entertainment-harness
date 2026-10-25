@@ -9,6 +9,7 @@ from entertainment_harness.config import (
     Config,
     ConfigError,
     ConfigWriteError,
+    apply_cloud_profile,
     load_config,
     parse_config,
     save_config,
@@ -139,3 +140,66 @@ def test_save_config_failed_replace_leaves_original_and_cleans_up(
 def test_parse_config_rejects_the_renamed_sequence_section():
     with pytest.raises(ConfigError, match="frame_animation"):
         parse_config({"sequence": {"fps": 2.0}})
+
+
+def test_cloud_absent_uses_defaults(tmp_path):
+    cfg = load_config(tmp_path / "nope.toml")
+    assert cfg.cloud.enabled is False
+    assert cfg.cloud.worker_url == ""
+    assert cfg.cloud.max_job_seconds == 1800
+
+
+def test_cloud_section_parse(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text(
+        "[cloud]\n"
+        "enabled = true\n"
+        'worker_url = "https://w.example.workers.dev"\n'
+        'database_id = "db1"\n'
+    )
+    cfg = load_config(path)
+    assert cfg.cloud.enabled is True
+    assert cfg.cloud.worker_url == "https://w.example.workers.dev"
+    assert cfg.cloud.database_id == "db1"
+
+
+def test_cloud_token_parse_and_resolution(tmp_path, monkeypatch):
+    path = tmp_path / "config.toml"
+    path.write_text('[cloud]\ntoken = "cfg-tok"\n')
+    cfg = load_config(path)
+    assert cfg.cloud.token == "cfg-tok"
+    # The config value wins over the env var.
+    monkeypatch.setenv("EH_CLOUD_TOKEN", "env-tok")
+    assert cfg.cloud.resolved_token == "cfg-tok"
+    # An empty config token falls back to the env var.
+    cfg.cloud.token = ""
+    assert cfg.cloud.resolved_token == "env-tok"
+    # Neither set → no token.
+    monkeypatch.delenv("EH_CLOUD_TOKEN")
+    assert cfg.cloud.resolved_token == ""
+
+
+def test_save_config_accepts_cloud_token(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text("[cloud]\nenabled = true\n")
+    save_config(path, {"cloud": {"token": "tok"}})
+    assert load_config(path).cloud.token == "tok"
+
+
+def test_cloud_profile_falls_back_to_kokoro_without_fish_key(monkeypatch):
+    monkeypatch.delenv("FISH_AUDIO_API_KEY", raising=False)
+    cfg = apply_cloud_profile(Config())
+    assert cfg.video.tts_engine == "kokoro"
+
+
+def test_cloud_profile_keeps_fish_when_key_present(monkeypatch):
+    monkeypatch.setenv("FISH_AUDIO_API_KEY", "sk-fish-test")
+    cfg = apply_cloud_profile(Config())
+    assert cfg.video.tts_engine == "fish"
+
+
+def test_cloud_profile_leaves_non_fish_engines_alone(monkeypatch):
+    monkeypatch.delenv("FISH_AUDIO_API_KEY", raising=False)
+    cfg = Config()
+    cfg.video.tts_engine = "say"
+    assert apply_cloud_profile(cfg).video.tts_engine == "say"

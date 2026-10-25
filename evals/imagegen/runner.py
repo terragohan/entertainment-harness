@@ -1,5 +1,6 @@
 """Run an experiment: per-arm config copies drive the shared generation
-loops (generate_frames_with / sequence_frames_with), metrics + judge
+loops (generate_frames_with / sequence_frames_with, or the director's
+instruct/assess/revise loop on `director = true` arms), metrics + judge
 scores land in manifest.json, and the gallery renders index.html.
 
 Design rules honored here: arms are config overrides on a deep copy of the
@@ -39,6 +40,7 @@ from entertainment_harness.video.sequence import (
 )
 
 from evals.imagegen import clients as clients_mod
+from evals.imagegen import director as director_mod
 from evals.imagegen import gallery as gallery_mod
 from evals.imagegen import judge as judge_mod
 from evals.imagegen.experiment import Arm, Experiment
@@ -123,6 +125,8 @@ def _apply_arm(config: Config, mode: str, arm: Arm) -> None:
     for key, value in arm.knobs.items():
         if key == "resolution":
             config.video.resolution = value
+        elif key == "director":
+            continue  # behavior flag for the runner, not a config field
         else:
             setattr(target, key, value)
 
@@ -133,9 +137,12 @@ def _arm_overrides(arm: Arm) -> dict:
 
 def _run_panel(experiment: Experiment, arm_config: Config, client,
                model: str, panel: Path, panel_copy: Path, workdir: Path,
-               critic, rel, log) -> tuple[dict, list[Path]]:
+               critic, rel, log, director: bool = False,
+               judge: tuple | None = None) -> tuple[dict, list[Path]]:
     """Drive the mode's loop for one panel; return the manifest entry and
-    the produced frame paths (absolute)."""
+    the produced frame paths (absolute). `director` swaps the plain
+    frame-animation loop for the instruct/assess/revise one (requires the
+    judge adapter, passed as the `judge` tuple)."""
     segment = Segment(index=0, text=experiment.context or "")
     if experiment.mode == "video-animation":
         cfg = arm_config.frames
@@ -154,10 +161,16 @@ def _run_panel(experiment: Experiment, arm_config: Config, client,
 
     before = set(frames_dir.glob("*.png")) if frames_dir.is_dir() else set()
     start = time.monotonic()
+    trajectory = None
     if experiment.mode == "video-animation":
         frames = generate_frames_with(
             client, model, arm_config.frames, panel, segment,
             experiment.duration, workdir, log,
+        )
+    elif director:
+        frames, trajectory = director_mod.direct_sequence(
+            client, model, arm_config, panel, segment,
+            experiment.duration, workdir, judge[0], judge[1], log,
         )
     else:
         frames = sequence_frames_with(
@@ -175,14 +188,23 @@ def _run_panel(experiment: Experiment, arm_config: Config, client,
         "wall_s": round(wall, 3),
         "ratio": ratio,
     }
+    if trajectory is not None:
+        metrics["revisions"] = sum(
+            len(t["attempts"]) - 1 for t in trajectory
+        )
+        metrics["judge_calls"] = sum(
+            len(a["verdicts"]) for t in trajectory for a in t["attempts"]
+        )
     if experiment.mode == "frame-animation" and len(frames) < requested:
-        metrics["truncated"] = True  # the critic cut the chain short
+        metrics["truncated"] = True  # the critic/director cut the chain short
     entry = {
         "source": str(panel),
         "image": rel(panel_copy),
         "frames": [rel(f) for f in frames],
         "metrics": metrics,
     }
+    if trajectory is not None:
+        entry["trajectory"] = trajectory
     return entry, frames
 
 
@@ -240,19 +262,21 @@ def run_experiment(
     run_dir.mkdir(parents=True, exist_ok=True)
 
     judge_enabled = experiment.judge if judge is None else bool(judge)
-    # The drift critic is a generation feature (it changes frames), not
-    # scoring — frame-animation arms with critic on need the adapter even
-    # under --no-judge. Both share one resolution, mirroring the pipeline.
-    critic_wanted = experiment.mode == "frame-animation" and any(
+    # The drift critic and the director are generation features (they
+    # change frames), not scoring — frame-animation arms using either need
+    # the adapter even under --no-judge. Both share one resolution,
+    # mirroring the pipeline.
+    assessor_wanted = experiment.mode == "frame-animation" and any(
         bool(arm.knobs.get("critic", config.frame_animation.critic))
+        or bool(arm.knobs.get("director", False))
         for arm in experiment.arms
     )
     judge_section: dict = {"enabled": judge_enabled}
-    if critic_wanted and not judge_enabled:
-        judge_section["note"] = "critic only (scoring disabled)"
+    if assessor_wanted and not judge_enabled:
+        judge_section["note"] = "critic/director only (scoring disabled)"
     judge_adapter = None
     judge_id = None
-    if judge_enabled or critic_wanted:
+    if judge_enabled or assessor_wanted:
         try:
             if judge_resolver is not None:
                 judge_adapter, judge_id = judge_resolver(config, profile)
@@ -263,7 +287,10 @@ def run_experiment(
             judge_section["model"] = judge_id
         except Exception as exc:
             judge_section["warning"] = f"judge unavailable: {exc}"
-            skipped = "scoring and the drift critic" if critic_wanted else "scoring"
+            skipped = (
+                "scoring and the drift critic/director"
+                if assessor_wanted else "scoring"
+            )
             log(f"Warning: judge unavailable ({exc}) — {skipped} skipped")
 
     # Panels copied into the run dir keep it a portable artifact.
@@ -329,6 +356,12 @@ def run_experiment(
                 and judge_adapter is not None
             ):
                 critic = drift_critic(judge_adapter, judge_id)
+            use_director = bool(arm.knobs.get("director", False))
+            if use_director and judge_adapter is None:
+                raise RuntimeError(
+                    "the director requires the judge adapter, which is"
+                    " unavailable"
+                )
             for index, panel in enumerate(experiment.panels):
                 if limit is not None and pairs_done >= limit:
                     break
@@ -339,6 +372,8 @@ def run_experiment(
                         entry, frames = _run_panel(
                             experiment, arm_config, client, model, panel,
                             panel_copies[index], workdir, critic, rel, log,
+                            director=use_director,
+                            judge=(judge_adapter, judge_id),
                         )
                 except Exception as exc:
                     # Per-panel granularity: a transient provider failure

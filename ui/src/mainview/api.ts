@@ -134,12 +134,16 @@ export interface StartRunBody {
 	skip_preflight: boolean;
 	instruction?: string | null;
 	detail?: string | null;
+	/** frame-animation frame rate; unset = [frame_animation] fps. */
+	fps?: number | null;
 }
 
 export interface AutoBody {
 	enabled: boolean;
 	detail?: string | null;
 	video_mode?: string | null;
+	/** frame-animation frame rate; unset = [frame_animation] fps. */
+	fps?: number | null;
 	instruction?: string | null;
 	skip_preflight?: boolean;
 	/** Optional scope; both unset = the default pending selection (from the

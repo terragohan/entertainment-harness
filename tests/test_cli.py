@@ -36,7 +36,7 @@ def test_recap_help_shows_thinking_and_video():
     assert result.exit_code == 0
     for flag in ("--thinking", "--video", "--translated", "--detail",
                  "--instruction", "--max-chapters", "--colorize",
-                 "--compress", "--video-mode", "--panel-first",
+                 "--compress", "--video-mode", "--fps", "--panel-first",
                  "--no-panel-first"):
         assert flag in result.output
 
@@ -361,6 +361,57 @@ def test_make_chapter_video_panel_first_forces_narration(tmp_path, monkeypatch):
     conn.close()
 
 
+def test_make_chapter_video_threads_fps(tmp_path, monkeypatch):
+    """--fps threads through the video callback into build_video."""
+    monkeypatch.setenv("EH_DATA_DIR", str(tmp_path))
+    from entertainment_harness import db
+    from entertainment_harness.cli import _make_chapter_video
+    from entertainment_harness.config import Config
+    from entertainment_harness.library import works
+
+    conn = db.connect()
+    conn.execute(
+        "INSERT INTO series (id, title, source, source_id, status, added_at)"
+        " VALUES ('s1', 'T', 'mangadex', 'x', 'ongoing', 'now')"
+    )
+    conn.execute(
+        "INSERT INTO chapters (id, series_id, chapter_num, title, lang, pages,"
+        " fetched_at) VALUES ('ch-1', 's1', 1.0, 'C', 'en', 3, 'now')"
+    )
+    conn.execute(
+        "INSERT INTO recaps (chapter_id, summary, created_at, model, detail)"
+        " VALUES ('ch-1', 's', 'now', 'm', 'standard')"
+    )
+    conn.commit()
+    series = conn.execute("SELECT * FROM series WHERE id = 's1'").fetchone()
+
+    calls: list[dict] = []
+
+    def fake_build(conn, row, chapter_row, config, profile, **kwargs):
+        calls.append(kwargs)
+        return works.video_dir_for_kind("s1", "ch-1", "recap") / "out.mp4"
+
+    monkeypatch.setattr(
+        "entertainment_harness.video.pipeline.build_video", fake_build
+    )
+
+    class _UI:
+        def log(self, msg):
+            pass
+
+    make_video = _make_chapter_video(
+        conn, series, Config(), None, _UI(),
+        voice=None, tts_engine=None, colorize=False, translated=False,
+        compress=None, video_mode="frame-animation", fps=4.0,
+    )
+    make_video("ch-1")
+
+    assert len(calls) == 1
+    assert calls[0]["video_mode"] == "frame-animation"
+    assert calls[0]["fps"] == 4.0
+    conn.close()
+
+
 def test_recap_panel_first_default_and_overrides(tmp_path, monkeypatch):
     """Panel-first is the default video script path. The flag is tri-state:
     no flag resolves to [video] panel_first= (true by default — a false
@@ -402,6 +453,34 @@ def test_recap_panel_first_default_and_overrides(tmp_path, monkeypatch):
     result = runner.invoke(app, ["recap", "s1", "--no-panel-first"])
     assert result.exit_code == 0, result.output
     assert seen == [True, False, True, False]
+
+
+def test_recap_fps_threads_to_video_callback(tmp_path, monkeypatch):
+    """eh recap --fps lands on the video callback alongside --video-mode."""
+    _seed_series_only(tmp_path, monkeypatch)
+    seen: list[dict] = []
+
+    def fake_make(conn, row, config, profile, ui, **kwargs):
+        seen.append(kwargs)
+
+        def make_video(chapter_id):  # no chapters; must never fire
+            raise AssertionError("callback fired")
+
+        return make_video
+
+    monkeypatch.setattr("entertainment_harness.cli._make_chapter_video",
+                        fake_make)
+    monkeypatch.setattr(
+        "entertainment_harness.pipelines.recap.recap_series",
+        lambda *args, **kwargs: [],
+    )
+    result = runner.invoke(
+        app, ["recap", "s1", "--video", "--video-mode", "frame-animation",
+              "--fps", "4"]
+    )
+    assert result.exit_code == 0, result.output
+    assert seen[0]["video_mode"] == "frame-animation"
+    assert seen[0]["fps"] == 4.0
 
 def test_sync_help_shows_force_and_lang():
     result = runner.invoke(app, ["sync", "--help"])
@@ -501,7 +580,7 @@ def test_recap_help_shows_pipeline_flags():
     assert result.exit_code == 0
     for flag in ("--thinking", "--video", "--translated",
                  "--max-chapters", "--colorize", "--compress", "--video-mode",
-                 "--panel-first", "--no-panel-first"):
+                 "--fps", "--panel-first", "--no-panel-first"):
         assert flag in result.output
 
 
@@ -529,6 +608,13 @@ def test_recap_video_mode_rejects_bad_value():
     )
     assert result.exit_code == 1
     assert "kenburns, scroll" in result.output
+
+
+def test_recap_fps_rejects_non_positive():
+    for value in ("0", "-1.5"):
+        result = runner.invoke(app, ["recap", "anything", "--fps", value])
+        assert result.exit_code == 1
+        assert "--fps must be greater than 0" in result.output
 
 
 def test_show_narration_prints_narrations(tmp_path, monkeypatch):

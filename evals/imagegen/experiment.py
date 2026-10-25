@@ -31,7 +31,7 @@ PROVIDERS = ("openrouter", "runway", "diffusers", "fal", "replicate")
 # never changes generated frames — the manifest/gallery label it.
 ANIMATE_KNOBS = frozenset({"seconds_per_frame", "max_frames"})
 SEQUENCE_KNOBS = frozenset(
-    {"fps", "max_frames", "interp_fps", "critic", "resolution"}
+    {"fps", "max_frames", "interp_fps", "critic", "resolution", "director"}
 )
 
 _TOP_KEYS = frozenset(
@@ -91,9 +91,9 @@ def _knob_value(key: str, value: object, arm_name: str, path: Path):
         if not isinstance(value, int) or isinstance(value, bool) or value < 1:
             raise ExperimentError(f"{where}: {key} must be an int >= 1")
         return value
-    if key == "critic":
+    if key in ("critic", "director"):
         if not isinstance(value, bool):
-            raise ExperimentError(f"{where}: critic must be a bool")
+            raise ExperimentError(f"{where}: {key} must be a bool")
         return value
     if key == "resolution":
         if not isinstance(value, str) or not _RESOLUTION_RE.fullmatch(value):
@@ -168,6 +168,11 @@ def _arms(raw: object, mode: str, path: Path) -> list[Arm]:
                     f" — the experiment mode is {mode!r}"
                 )
             knobs[key] = _knob_value(key, entry[key], name, path)
+        if knobs.get("director") and knobs.get("critic"):
+            raise ExperimentError(
+                f"{path}: arm {name!r}: director and critic conflict — the"
+                " director subsumes the drift critic"
+            )
         arms.append(Arm(name=name, provider=provider, model=model, knobs=knobs))
     return arms
 

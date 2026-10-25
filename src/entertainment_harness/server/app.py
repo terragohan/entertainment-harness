@@ -35,6 +35,11 @@ from entertainment_harness.server.castbuilds import (
     CastBuildManager,
 )
 from entertainment_harness.server.exports import ExportConflict, ExportManager
+from entertainment_harness.server.remote import (
+    RemoteError,
+    RemoteRunManager,
+    remote_event_stream,
+)
 from entertainment_harness.server.runs import (
     Run,
     RunConflict,
@@ -64,6 +69,7 @@ class RunRequest(BaseModel):
     colorize: bool = False
     compress: str | None = None
     video_mode: str | None = None
+    fps: float | None = None  # frame-animation rate; None = [frame_animation] fps=
     panel_first: bool | None = None
     skip_preflight: bool = False
 
@@ -83,6 +89,7 @@ class AutoRequest(BaseModel):
     instruction: str | None = None
     skip_preflight: bool = False
     video_mode: str | None = None  # kenburns | scroll; None = [video] mode=
+    fps: float | None = None  # frame-animation rate; None = [frame_animation] fps=
     chapters: str | None = None  # optional "--chapters"-style scope
     all_chapters: bool = False  # optional scope: every synced chapter
 
@@ -205,6 +212,8 @@ def _validate_run_request(req: RunRequest) -> None:
             raise HTTPException(
                 422, f"video_mode must be one of: {', '.join(VIDEO_MODES)}"
             )
+    if req.fps is not None and req.fps <= 0:
+        raise HTTPException(422, "fps must be greater than 0")
 
 
 def create_app() -> FastAPI:
@@ -217,7 +226,14 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    runs = RunManager()
+    config = load_config()
+    # Remote mode (Track B): with [cloud] enabled, run control proxies to
+    # the cloud Worker — jobs execute on Cloudflare containers. Library,
+    # streaming, and config endpoints stay local.
+    if config.cloud.enabled and config.cloud.worker_url:
+        runs = RemoteRunManager.from_config(config)
+    else:
+        runs = RunManager()
     app.state.runs = runs
     supervisor = AutoSupervisor(runs)
     supervisor.load()
@@ -226,6 +242,12 @@ def create_app() -> FastAPI:
     app.state.exports = exports
     cast_builds = CastBuildManager()
     app.state.cast_builds = cast_builds
+
+    @app.exception_handler(RemoteError)
+    async def _remote_error(request, exc: RemoteError):
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse({"detail": str(exc)}, status_code=502)
 
     @app.get("/api/health")
     def health() -> dict:
@@ -417,8 +439,13 @@ def create_app() -> FastAPI:
         run = runs.get(run_id)
         if run is None:
             raise HTTPException(404, f"No run {run_id!r}")
+        stream = (
+            remote_event_stream(runs, run_id)
+            if isinstance(runs, RemoteRunManager)
+            else _event_stream(run)
+        )
         return StreamingResponse(
-            _event_stream(run),
+            stream,
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
@@ -426,8 +453,8 @@ def create_app() -> FastAPI:
     @app.put("/api/works/{work}/auto")
     def set_auto(work: str, req: AutoRequest) -> dict:
         """The per-work auto-process toggle. Enabling persists the toggle
-        and its modifiers (detail/instruction/skip_preflight/video_mode) and
-        starts a run immediately when the work has unfinished chapters;
+        and its modifiers (detail/instruction/skip_preflight/video_mode/fps)
+        and starts a run immediately when the work has unfinished chapters;
         disabling persists and cooperatively stops any active run for the
         work. The toggle never auto-resumes: state loaded from disk at
         startup is disarmed, so after a backend restart the user must flip
@@ -443,6 +470,8 @@ def create_app() -> FastAPI:
             raise HTTPException(
                 422, f"video_mode must be one of: {', '.join(VIDEO_MODES)}"
             )
+        if req.fps is not None and req.fps <= 0:
+            raise HTTPException(422, "fps must be greater than 0")
         if req.chapters and req.all_chapters:
             raise HTTPException(
                 422, "chapters and all_chapters are mutually exclusive"
@@ -465,6 +494,7 @@ def create_app() -> FastAPI:
                 "instruction": req.instruction,
                 "skip_preflight": req.skip_preflight,
                 "video_mode": req.video_mode,
+                "fps": req.fps,
                 "chapters": req.chapters,
                 "all_chapters": req.all_chapters,
             },

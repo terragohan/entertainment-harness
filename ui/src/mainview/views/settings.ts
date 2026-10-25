@@ -206,6 +206,9 @@ function renderDict(
 				fieldset.append(node);
 			nodes.push(fieldset);
 		} else {
+			// Already curated elsewhere (e.g. tts.fish.api_key renders as a
+			// secret in the API keys panel) — don't duplicate it here.
+			if (placed.has(childPath)) continue;
 			nodes.push(fieldRow(fields, placed, config, childPath));
 		}
 	}
@@ -364,6 +367,14 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
 	}
 	status.remove();
 
+	const searchInput = el("input", {
+		type: "search",
+		class: "settings-search",
+		placeholder: "Search settings — label, config path, or help text",
+	}) as HTMLInputElement;
+	const searchInfo = el("span", { class: "muted settings-search-info" });
+	container.append(el("div", { class: "settings-search-row" }, searchInput, searchInfo));
+
 	const fields: Field[] = [];
 	const placed = new Set<string>();
 	const message = el("div", { style: "display:none" });
@@ -386,6 +397,16 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
 				label: "OpenAI-compatible API key",
 				kind: "secret",
 				help: "OpenRouter or compatible endpoint; falls back to OPENAI_COMPAT_API_KEY / OPENROUTER_API_KEY",
+			}),
+			row("tts.fish.api_key", {
+				label: "Fish Audio API key",
+				kind: "secret",
+				help: "default TTS engine (drama-3 narration); falls back to FISH_AUDIO_API_KEY",
+			}),
+			row("cloud.token", {
+				label: "Cloud worker token",
+				kind: "secret",
+				help: "bearer token for cloud jobs (eh cloud / remote runs); falls back to EH_CLOUD_TOKEN",
 			}),
 			row("store.r2.access_key_id", {
 				label: "R2 access key ID",
@@ -527,7 +548,12 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
 				kind: "select",
 				options: VIDEO_MODES,
 			}),
-			row("video.tts_engine", { label: "TTS engine", help: "see `eh plugins`" }),
+			row("video.tts_engine", {
+				label: "TTS engine",
+				kind: "select",
+				options: ["fish", "kokoro", "say", "qwen3"],
+				help: "fish = Fish Audio cloud API, drama-3 narration (default); kokoro = local; say = macOS; qwen3 = voice cloning",
+			}),
 			row("video.voice"),
 			row("video.resolution"),
 			row("video.compress", {
@@ -780,4 +806,77 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
 		el("h2", {}, "Sources"),
 		el("div", { class: "settings-section" }, el("h3", {}, "Enabled sources"), sourcesBody, sourcesMessage),
 	);
+
+	// --- settings search -----------------------------------------------
+	// Filters the config groups above: a field matches on its label, its
+	// config path, or its help text; subsections and groups with nothing
+	// visible collapse. Sources and the save row are outside the filtered
+	// groups and stay put.
+	const searchable: { row: HTMLElement; text: string }[] = [];
+	for (const field of fields) {
+		const row = field.input.closest(".field-row");
+		if (!row || !row.closest(".settings-group")) continue;
+		const label = row.querySelector("label");
+		searchable.push({
+			row: row as HTMLElement,
+			text: [
+				field.path,
+				label?.textContent ?? "",
+				label?.getAttribute("title") ?? "",
+			]
+				.join(" ")
+				.toLowerCase(),
+		});
+	}
+	const groups = Array.from(container.querySelectorAll(".settings-group"));
+	const subsections = Array.from(
+		container.querySelectorAll(".settings-subsection"),
+	);
+
+	function applySettingsSearch(): void {
+		const q = searchInput.value.trim().toLowerCase();
+		if (q === "") {
+			for (const item of searchable) {
+				item.row.hidden = false;
+				item.row.classList.remove("search-hit");
+			}
+			for (const node of [...subsections, ...groups])
+				(node as HTMLElement).hidden = false;
+			searchInfo.textContent = "";
+			return;
+		}
+		let hits = 0;
+		for (const item of searchable) {
+			const match = item.text.includes(q);
+			item.row.hidden = !match;
+			item.row.classList.toggle("search-hit", match);
+			if (match) hits += 1;
+		}
+		// Collapse empty containers, innermost subsections first.
+		for (const fieldset of subsections.slice().reverse()) {
+			const visible = Array.from(
+				fieldset.querySelectorAll(".field-row, .settings-subsection"),
+			).some((node) => !(node as HTMLElement).hidden);
+			(fieldset as HTMLElement).hidden = !visible;
+		}
+		for (const group of groups) {
+			const visible =
+				group.querySelector(".field-row:not([hidden])") !== null;
+			(group as HTMLElement).hidden = !visible;
+		}
+		searchInfo.textContent =
+			hits === 0 ? "no matches" : `${hits} match${hits === 1 ? "" : "es"}`;
+	}
+
+	searchInput.addEventListener("input", applySettingsSearch);
+	searchInput.addEventListener("keydown", (event) => {
+		if (event.key === "Enter") {
+			container
+				.querySelector(".settings-group .field-row:not([hidden])")
+				?.scrollIntoView({ block: "nearest" });
+		} else if (event.key === "Escape" && searchInput.value !== "") {
+			searchInput.value = "";
+			applySettingsSearch();
+		}
+	});
 }

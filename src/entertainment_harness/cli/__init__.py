@@ -97,7 +97,8 @@ def _pipeline_config(
 
 def _validate_pipeline_opts(
     all_chapters: bool, chapter: float | None,
-    compress: str | None, video_mode: str | None, max_chapters: int,
+    compress: str | None, video_mode: str | None, fps: float | None,
+    max_chapters: int,
 ) -> None:
     """Shared option validation for `eh recap`."""
     from entertainment_harness.video.compress import PRESETS
@@ -115,6 +116,9 @@ def _validate_pipeline_opts(
         err_console.print(
             f"[red]--video-mode must be one of: {', '.join(VIDEO_MODES)}[/red]"
         )
+        raise typer.Exit(code=1)
+    if fps is not None and fps <= 0:
+        err_console.print("[red]--fps must be greater than 0[/red]")
         raise typer.Exit(code=1)
 
 
@@ -154,7 +158,7 @@ def _run_preflight_check(
 
 def _make_chapter_video(conn, row, config, profile, ui, *,
                         voice, tts_engine, colorize, translated, compress,
-                        video_mode, panel_first=False):
+                        video_mode, fps=None, panel_first=False):
     """Return the callback that (re)builds one chapter's video and pushes it
     to the store when configured. The video kind follows the artifact's
     detail (full -> narration, else recap); panel_first forces narration.
@@ -194,7 +198,7 @@ def _make_chapter_video(conn, row, config, profile, ui, *,
             voice=voice, engine_name=tts_engine,
             colorize=True if colorize else None,
             translated=True if translated else None,
-            compress=compress, video_mode=video_mode,
+            compress=compress, video_mode=video_mode, fps=fps,
             panel_first=panel_first,
             progress=ui, log=ui.log,
         )
@@ -262,6 +266,7 @@ def _run_chapter_pipeline(
     colorize: bool,
     compress: str | None,
     video_mode: str | None,
+    fps: float | None,
     panel_first: bool | None,
     vision_model: str | None,
     text_model: str | None,
@@ -288,7 +293,7 @@ def _run_chapter_pipeline(
             err_console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1) from exc
     _validate_pipeline_opts(all_chapters, chapter, compress, video_mode,
-                            max_chapters)
+                            fps, max_chapters)
     config = _pipeline_config(thinking, vision_model, text_model, backend, quant,
                               detail=detail, instruction=instruction)
     # Resolve @file here rather than in _pipeline_config: only recap consumes
@@ -341,7 +346,7 @@ def _run_chapter_pipeline(
                 conn, row, config, profile, ui,
                 voice=voice, tts_engine=tts_engine, colorize=colorize,
                 translated=translated, compress=compress, video_mode=video_mode,
-                panel_first=panel_first,
+                fps=fps, panel_first=panel_first,
             )
             recap_series(
                 conn, row, config, profile, all_chapters=all_chapters,
@@ -432,7 +437,9 @@ def recap(
     ),
     voice: str | None = typer.Option(None, "--voice", help="TTS voice (with --video)"),
     tts_engine: str | None = typer.Option(
-        None, "--tts-engine", help="kokoro, say, or qwen3 (voice cloning; with --video)"
+        None, "--tts-engine",
+        help="kokoro (default), say (macOS), fish (Fish Audio cloud API),"
+             " or qwen3 (voice cloning; with --video)",
     ),
     colorize: bool = typer.Option(
         False, "--colorize",
@@ -450,6 +457,11 @@ def recap(
         " video-animation (AI-generated panel frames; uses [frames]"
         " provider), frame-animation (panel outpainted to video size, AI"
         " frames chained into motion; uses [frame_animation] provider)",
+    ),
+    fps: float | None = typer.Option(
+        None, "--fps",
+        help="Generated frames per second of slot share (frame-animation"
+        " mode only); default from [frame_animation] fps",
     ),
     panel_first: bool | None = typer.Option(
         None, "--panel-first/--no-panel-first",
@@ -485,7 +497,7 @@ def recap(
     _run_chapter_pipeline(
         series, all_chapters, chapter, chapters, max_chapters, video,
         translated, thinking,
-        voice, tts_engine, colorize, compress, video_mode, panel_first,
+        voice, tts_engine, colorize, compress, video_mode, fps, panel_first,
         vision_model, text_model,
         backend, quant, dry_run, skip_preflight,
         detail=detail, instruction=instruction,
@@ -493,6 +505,8 @@ def recap(
 
 
 import entertainment_harness.cli.library as _library_commands  # noqa: E402, F401
+from . import cloud as _cloud_commands  # noqa: E402, F401
+from . import jobs as _jobs_commands  # noqa: E402, F401
 from . import models as _models_commands  # noqa: E402, F401
 from . import plugins as _plugins_commands  # noqa: E402, F401
 from . import serve as _serve_commands  # noqa: E402, F401

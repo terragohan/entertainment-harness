@@ -52,6 +52,7 @@ class RunOptions:
     colorize: bool = False
     compress: str | None = None
     video_mode: str | None = None
+    fps: float | None = None  # frame-animation rate; None = [frame_animation] fps=
     panel_first: bool | None = None  # None = [video] panel_first=
     skip_preflight: bool = False
 
@@ -185,6 +186,7 @@ def _make_chapter_video(conn, row, config, profile, options: RunOptions,
             colorize=True if options.colorize else None,
             translated=True if options.translated else None,
             compress=options.compress, video_mode=options.video_mode,
+            fps=options.fps,
             panel_first=panel_first,
             progress=progress, log=progress.log,
         )
@@ -198,18 +200,11 @@ def _make_chapter_video(conn, row, config, profile, options: RunOptions,
     return make_video
 
 
-def _run_flow(run: Run, options: RunOptions, progress: ServerProgress) -> int:
-    """The `eh recap` flow (cli._run_chapter_pipeline) minus the TTY bits.
-    Returns the number of chapters recapped."""
-    from entertainment_harness.cli import _chapters_missing_video
-    from entertainment_harness.hardware import probe, snapshot
-    from entertainment_harness.pipelines.recap import (
-        DETAIL_LEVELS,
-        chapter_needs_work,
-        recap_series,
-        select_chapters,
-    )
-    from entertainment_harness.preflight import check, plan_for_recap
+def config_for_run(options: RunOptions):
+    """load_config() plus the per-run option overrides; returns
+    (config, detail). Shared by _run_flow and jobs.py's scoped stage-in,
+    so both see the same effective config."""
+    from entertainment_harness.pipelines.recap import DETAIL_LEVELS
 
     config = load_config()
     if options.thinking is not None:
@@ -222,7 +217,46 @@ def _run_flow(run: Run, options: RunOptions, progress: ServerProgress) -> int:
         raise RunError(
             f"[pipeline] detail must be one of: {', '.join(DETAIL_LEVELS)}"
         )
-    detail = config.pipeline.detail
+    return config, config.pipeline.detail
+
+
+def select_run_chapters(conn, row, config, options: RunOptions, *,
+                        detail: str, log) -> list:
+    """The chapters a run with these options will process: select_chapters
+    plus the skip_done filter. Shared by _run_flow and by jobs.py, which
+    stages in exactly these chapters' pages before the flow starts."""
+    from entertainment_harness.pipelines.recap import (
+        chapter_needs_work,
+        select_chapters,
+    )
+
+    chapters = select_chapters(
+        conn, row, config, detail=detail, chapter_num=options.chapter,
+        chapters_spec=options.chapters, all_chapters=options.all_chapters,
+        max_chapters=options.max_chapters, translated=options.translated,
+        fill_gaps=options.video, verb="recap", log=log,
+    )
+    if options.skip_done and chapters:
+        # Same filter recap_series applies, so the pre-flight plan (and
+        # its model/RAM estimates) covers only what will actually run.
+        chapters = [
+            c for c in chapters
+            if chapter_needs_work(
+                conn, row["id"], c, detail=detail, want_video=options.video,
+            )
+        ]
+    return chapters
+
+
+def _run_flow(run: Run, options: RunOptions, progress: ServerProgress) -> int:
+    """The `eh recap` flow (cli._run_chapter_pipeline) minus the TTY bits.
+    Returns the number of chapters recapped."""
+    from entertainment_harness.cli import _chapters_missing_video
+    from entertainment_harness.hardware import probe, snapshot
+    from entertainment_harness.pipelines.recap import recap_series
+    from entertainment_harness.preflight import check, plan_for_recap
+
+    config, detail = config_for_run(options)
     panel_first = (
         config.video.panel_first if options.panel_first is None
         else options.panel_first
@@ -234,23 +268,9 @@ def _run_flow(run: Run, options: RunOptions, progress: ServerProgress) -> int:
         # fill_gaps mirrors `eh recap --video` (cli._run_chapter_pipeline):
         # chapters behind the read frontier with no artifact and no usable
         # video join the run as standalone gap-fills.
-        chapters = select_chapters(
-            conn, row, config, detail=detail, chapter_num=options.chapter,
-            chapters_spec=options.chapters,
-            all_chapters=options.all_chapters,
-            max_chapters=options.max_chapters, translated=options.translated,
-            fill_gaps=options.video, verb="recap", log=progress.log,
+        chapters = select_run_chapters(
+            conn, row, config, options, detail=detail, log=progress.log
         )
-        if options.skip_done and chapters:
-            # Same filter recap_series applies, so the pre-flight plan (and
-            # its model/RAM estimates) covers only what will actually run.
-            chapters = [
-                c for c in chapters
-                if chapter_needs_work(
-                    conn, row["id"], c, detail=detail,
-                    want_video=options.video,
-                )
-            ]
         if chapters and config.preflight.enabled and not options.skip_preflight:
             snap = snapshot(data_dir(), config.hardware.budget_gb)
             plan = plan_for_recap(

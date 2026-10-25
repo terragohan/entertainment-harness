@@ -37,11 +37,14 @@ from entertainment_harness.video.pipeline import (
     tts_stage,
 )
 from entertainment_harness.video.script import (
+    SCRIPT_GUIDANCE_PLAIN,
     Segment,
     VideoError,
     load_script,
     parse_script,
+    read_script_guidance,
     save_script,
+    script_guidance_for,
 )
 from entertainment_harness.video.tts import get_engine
 from entertainment_harness.video.visuals import assign_pages
@@ -59,7 +62,7 @@ Story summary:
 Requirements:
 - 8 to 12 segments; 150-230 words in total.
 - Segment 1 MUST be a single-sentence hook that makes the viewer want to hear the rest (a question or bold claim about the story — no clickbait lies).
-- Every later segment is 15-30 words of punchy spoken English, present tense, no headers, no stage directions.
+- Every later segment is 15-30 words of {guidance}, present tense, no headers, no stage directions.
 - Faithful to the summary: no new events, names, or details.
 - Tag each segment with a short "moment" label naming the story beat (e.g. "Shin hunts the boar").
 {steering}
@@ -73,14 +76,19 @@ def generate_short_script(
     summary: str,
     title: str,
     steering_prompt: str = "",
+    guidance: str = SCRIPT_GUIDANCE_PLAIN,
 ) -> list[Segment]:
+    if guidance == SCRIPT_GUIDANCE_PLAIN:
+        guidance = "punchy spoken English"  # the original shorts wording
+    else:
+        guidance = guidance[0].lower() + guidance[1:]
     steering = (
         f"\nSteering direction for the video: {steering_prompt}\n"
         if steering_prompt
         else ""
     )
     prompt = SHORT_SCRIPT_PROMPT.format(
-        title=title, summary=summary, steering=steering
+        title=title, summary=summary, steering=steering, guidance=guidance
     )
     return parse_script(adapter.generate(model, prompt))
 
@@ -141,10 +149,19 @@ def build_short(
         )
 
     # --- stage 1: short script ---------------------------------------------
-    if script_path.exists():
+    # The engine is resolved here (not in stage 2) because its delivery
+    # guidance shapes the script prompt.
+    engine = get_engine(engine_name or config.video.tts_engine, config)
+    guidance = script_guidance_for(engine)
+    cached_guidance = (
+        read_script_guidance(script_path) or SCRIPT_GUIDANCE_PLAIN
+    ) if script_path.exists() else guidance
+    if script_path.exists() and cached_guidance == guidance:
         segments, script_model = load_script(script_path)
         log(f"Stage 1/4 script: cached ({len(segments)} segments)")
     else:
+        if script_path.exists():
+            log("Stage 1/4 script: delivery guidance changed, regenerating...")
         clear_downstream(workdir, narration=True)
         text = get_text_model(config, profile)
         if text.warning:
@@ -164,13 +181,15 @@ def build_short(
             context["rolling_summary"],
             title,
             steering_prompt=chosen_steering,
+            guidance=guidance,
         )
         script_model = model_tag(text.info)
-        save_script(script_path, segments, title, 0, script_model)
+        save_script(
+            script_path, segments, title, 0, script_model, guidance=guidance,
+        )
         log_word_count(segments, log)
 
     # --- stage 2: narration (audio durations are authoritative) ------------
-    engine = get_engine(engine_name or config.video.tts_engine, config)
     tts_stage(
         segments, script_path, title, 0, script_model,
         engine, workdir, voice, log,

@@ -106,7 +106,8 @@ def list_cmd(
     console.print(table)
     console.print(
         "[dim]estimates = frame_count(duration, knobs) × panels, summed"
-        " over arms; a frame-animation critic can double its arm at worst[/dim]"
+        " over arms; a frame-animation critic can double its arm at worst,"
+        " a director arm triple it[/dim]"
     )
 
 

@@ -1,0 +1,16 @@
+.git
+.venv
+__pycache__
+.pytest_cache
+dist
+build
+ui/node_modules
+ui/build
+ui/.dev-data
+evals/runs
+samples
+docs
+site
+assets
+*.pyc
+.DS_Store

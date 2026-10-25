@@ -12,6 +12,7 @@ produced out.mp4 so toggling it re-renders instead of serving stale video.
 
 from __future__ import annotations
 
+import copy
 import json
 import shutil
 import sqlite3
@@ -53,11 +54,14 @@ from entertainment_harness.video.frames import (
 from entertainment_harness.video.grounding import ground_segments
 from entertainment_harness.video.panelfirst import build_panel_first_script
 from entertainment_harness.video.script import (
+    SCRIPT_GUIDANCE_PLAIN,
     VideoError,
     apply_pauses,
     generate_script,
     load_script,
+    read_script_guidance,
     save_script,
+    script_guidance_for,
     segments_from_narration,
 )
 from entertainment_harness.video.tts import get_engine, render_narration
@@ -249,6 +253,7 @@ def build_video(
     translated: bool | None = None,
     compress: str | None = None,
     video_mode: str | None = None,
+    fps: float | None = None,
     source: str | None = None,
     panel_first: bool | None = None,
     client: MangaDexClient | None = None,
@@ -283,12 +288,22 @@ def build_video(
     [video] compress= config default. The presentation mode (kenburns or
     scroll) comes from --video-mode or [video] mode=; render_state.json
     records it plus the artifact's detail, so toggling either re-renders.
+    `fps` overrides [frame_animation] fps for this build only (read by the
+    frame-animation mode); it lands in the same render state, so a
+    different fps re-renders instead of reusing stale frames.
     Concat inputs (clips/, seg-*.wav) are pruned once a final video exists;
     with keep_master = false the master is pruned too. progress, if given,
     receives stage() updates for the live UI (see ui.py).
     """
     if source not in (None, "recap", "narration"):
         raise VideoError(f"Bad video source {source!r}; expected recap or narration")
+    if fps is not None:
+        if fps <= 0:
+            raise VideoError(f"Bad fps {fps:g}; expected a positive number")
+        # Per-run override of [frame_animation] fps, applied to a deep copy
+        # (the eval runner's arm pattern) so the caller's Config is untouched.
+        config = copy.deepcopy(config)
+        config.frame_animation.fps = float(fps)
     panel_first_enabled = (
         config.video.panel_first if panel_first is None else panel_first
     )
@@ -432,12 +447,28 @@ def build_video(
         )
 
     # --- stage 1: narration script -----------------------------------------
+    # The TTS engine is resolved here (not in stage 2) because its delivery
+    # guidance shapes the script prompt.
     if progress is not None:
         progress.stage("video", "script")
+    engine = get_engine(engine_name or config.video.tts_engine, config)
+    guidance = script_guidance_for(engine)
     cached = None
     if script_path.exists():
         loaded_segments, loaded_model = load_script(script_path)
-        if loaded_model.startswith("panel-first") != panel_first_enabled:
+        stored_guidance = (
+            read_script_guidance(script_path) or SCRIPT_GUIDANCE_PLAIN
+        )
+        if stored_guidance != guidance and not loaded_model.startswith(
+            "narration"
+        ):
+            # A different delivery phrasing (e.g. switched to a drama
+            # engine) rewrites a model-written script; the cached one is
+            # the other voice. Verbatim "narration" splits are artifact
+            # text — engine-independent, so they stay.
+            log("Stage 1/4 script: delivery guidance changed, regenerating...")
+            script_path.unlink()
+        elif loaded_model.startswith("panel-first") != panel_first_enabled:
             # Panel-first shares the video-narration workdir with the
             # artifact-split path; a script written by the other stage-1
             # path is not this run's script — regenerate it.
@@ -470,13 +501,16 @@ def build_video(
         text.adapter.ensure(text.info.name)
         segments, status = build_panel_first_script(
             vision, text, judge, _page_paths(), series, chapter,
-            instruction=instruction,
+            instruction=instruction, guidance=guidance,
             max_attempts=ATTEMPTS.get(thinking, MAX_ATTEMPTS),
             vision_verify=thinking == "high",
             log=log,
         )
         script_model = f"panel-first ({model_tag(text.info)})"
-        save_script(script_path, segments, title, chapter_num, script_model)
+        save_script(
+            script_path, segments, title, chapter_num, script_model,
+            guidance=guidance,
+        )
         log(f"  panel-first grouping: {status}")
         log_word_count(segments, log)
     elif kind == "narration":
@@ -525,10 +559,13 @@ def build_video(
             cast = load_cast_block(conn, series["id"], block=cast_script_block)
         segments = generate_script(
             text.adapter, text.info.name, artifact["summary"], title,
-            chapter_num, cast=cast,
+            chapter_num, cast=cast, guidance=guidance,
         )
         script_model = model_tag(text.info)
-        save_script(script_path, segments, title, chapter_num, script_model)
+        save_script(
+            script_path, segments, title, chapter_num, script_model,
+            guidance=guidance,
+        )
         log_word_count(segments, log)
 
     apply_pauses(segments)  # breathing room between beats (deterministic)
@@ -544,7 +581,6 @@ def build_video(
     # --- stage 2: narration (audio durations are authoritative) ------------
     if progress is not None:
         progress.stage("video", "narration")
-    engine = get_engine(engine_name or config.video.tts_engine, config)
     tts_stage(
         segments, script_path, title, chapter_num, script_model,
         engine, workdir, voice, log,

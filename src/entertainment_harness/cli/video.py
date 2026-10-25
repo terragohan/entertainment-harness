@@ -130,7 +130,7 @@ def tiktok(
     title: str,
     voice: str | None = typer.Option(None, "--voice"),
     tts_engine: str | None = typer.Option(
-        None, "--tts-engine", help="kokoro, say, or qwen3 (voice cloning)"
+        None, "--tts-engine", help="kokoro (default), say (macOS), fish (Fish Audio cloud API), or qwen3 (voice cloning)"
     ),
     vision_model: str | None = typer.Option(None, "--vision-model"),
     text_model: str | None = typer.Option(None, "--text-model"),

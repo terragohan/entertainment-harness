@@ -178,6 +178,7 @@ button.secondary {
 input[type="text"],
 input[type="number"],
 input[type="password"],
+input[type="search"],
 select,
 textarea {
 	background: var(--bg);
@@ -615,6 +616,36 @@ input[type="number"] {
 	color: var(--text-dim);
 	font-size: 12px;
 	margin: 4px 0 10px;
+}
+
+/* --- settings search --- */
+
+.settings-search-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 2px 0 14px;
+}
+
+.settings-search-row .settings-search {
+	flex: 1;
+	max-width: 420px;
+}
+
+.settings-search-info {
+	font-size: 12px;
+}
+
+/* The hidden attribute must win over the display rules above
+   (.field-row is display:flex). */
+.field-row[hidden],
+.settings-subsection[hidden],
+.settings-group[hidden] {
+	display: none;
+}
+
+.field-row.search-hit label {
+	color: var(--text);
 }
 
 .save-row {

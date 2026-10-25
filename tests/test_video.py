@@ -20,6 +20,8 @@ from entertainment_harness.models.registry import Selection
 from entertainment_harness.video import pipeline
 from entertainment_harness.video.script import (
     BEAT_PAUSE_S,
+    SCRIPT_GUIDANCE_DRAMA,
+    SCRIPT_GUIDANCE_PLAIN,
     SCRIPT_PROMPT,
     TRANSITION_PAUSE_S,
     Segment,
@@ -29,6 +31,7 @@ from entertainment_harness.video.script import (
     generate_script,
     load_script,
     parse_script,
+    read_script_guidance,
     save_script,
     segments_from_narration,
     split_long_segments,
@@ -161,6 +164,51 @@ def test_script_roundtrip_old_format_without_pause(tmp_path):
     assert loaded == [Segment(index=0, text="A", moment="x", pages=[2],
                               motion="zoom_in", duration_s=3.0,
                               pause_after_s=0.0)]
+
+
+def test_script_guidance_roundtrip_and_resave_preserves(tmp_path):
+    path = tmp_path / "script.json"
+    segs = [Segment(index=0, text="A")]
+    save_script(path, segs, "T", 1.0, "m", guidance=SCRIPT_GUIDANCE_DRAMA)
+    assert read_script_guidance(path) == SCRIPT_GUIDANCE_DRAMA
+    # Stage re-saves (pages/motion/durations filled in) omit guidance and
+    # must not wipe the recorded voice.
+    save_script(path, segs, "T", 1.0, "m")
+    assert read_script_guidance(path) == SCRIPT_GUIDANCE_DRAMA
+    # Pre-guidance scripts read as "" (callers treat that as plain).
+    assert read_script_guidance(tmp_path / "missing.json") == ""
+
+
+def test_script_prompt_guidance_variants():
+    """Plain guidance keeps the original wording byte-identical; drama
+    swaps the delivery line."""
+    assert "{guidance}" in SCRIPT_PROMPT
+    plain = SCRIPT_PROMPT.format(
+        chapter="1", title="T", recap="r", cast="", guidance=SCRIPT_GUIDANCE_PLAIN
+    )
+    assert ("- Plain spoken English, present tense, no headers, no stage"
+            " directions.") in plain
+    drama = SCRIPT_PROMPT.format(
+        chapter="1", title="T", recap="r", cast="", guidance=SCRIPT_GUIDANCE_DRAMA
+    )
+    assert "Expressive dramatic narration" in drama
+    assert "Plain spoken English" not in drama
+
+
+def test_generate_script_injects_guidance():
+    class RecordingAdapter:
+        def __init__(self):
+            self.prompts = []
+
+        def generate(self, model, prompt):
+            self.prompts.append(prompt)
+            return '[{"text": "A."}]'
+
+    rec = RecordingAdapter()
+    generate_script(rec, "m", "recap", "T", 1.0, guidance=SCRIPT_GUIDANCE_DRAMA)
+    assert "Expressive dramatic narration" in rec.prompts[0]
+    generate_script(rec, "m", "recap", "T", 1.0)  # default stays plain
+    assert "Plain spoken English" in rec.prompts[1]
 
 
 # --- script pacing ------------------------------------------------------------
@@ -1401,6 +1449,67 @@ def test_build_video_sequence_model_change_re_renders(harness, monkeypatch):
         client=FakeClient(), log=lambda m: None, video_mode="frame-animation",
     )
     assert seen["renders"] == 2  # the image model is part of the render state
+
+
+def test_build_video_sequence_fps_override_reaches_animator(harness, monkeypatch):
+    """The per-run fps override lands on a deep copy of the config (the
+    animator's reads see it), leaving the caller's Config untouched, and is
+    stamped into the frame-animation render-state key."""
+    args, seen, animator = _sequence_harness(harness, monkeypatch)
+    conn, series, chapter, config, profile = args
+    configs: list[Config] = []
+    monkeypatch.setattr(
+        pipeline, "get_frame_animator",
+        lambda name, cfg: configs.append(cfg) or animator,
+    )
+    pipeline.build_video(
+        conn, series, chapter, config, profile,
+        client=FakeClient(), log=lambda m: None, video_mode="frame-animation",
+        fps=4.0,
+    )
+    assert configs[0].frame_animation.fps == 4.0
+    assert config.frame_animation.fps == 1.5  # caller's Config untouched
+    import json
+    state = json.loads(
+        (works.video_dir_for_kind("s1", "ch-1", "recap") / "render_state.json")
+        .read_text()
+    )
+    assert state["frame_animation"] == "fake-seq::4.0"
+
+
+def test_build_video_sequence_fps_override_re_renders(harness, monkeypatch):
+    """A different fps override busts the frame-animation cache key; the same
+    override reuses the cached render."""
+    args, seen, _ = _sequence_harness(harness, monkeypatch)
+    conn, series, chapter, config, profile = args
+    pipeline.build_video(
+        conn, series, chapter, config, profile,
+        client=FakeClient(), log=lambda m: None, video_mode="frame-animation",
+    )
+    assert seen["renders"] == 1
+    pipeline.build_video(
+        conn, series, chapter, config, profile,
+        client=FakeClient(), log=lambda m: None, video_mode="frame-animation",
+        fps=3.0,
+    )
+    assert seen["renders"] == 2  # override differs from the default-fps key
+    pipeline.build_video(
+        conn, series, chapter, config, profile,
+        client=FakeClient(), log=lambda m: None, video_mode="frame-animation",
+        fps=3.0,
+    )
+    assert seen["renders"] == 2  # same override: cached
+
+
+def test_build_video_fps_rejects_non_positive(harness):
+    conn, series, chapter, profile = harness[:4]
+    for bad in (0, -1.5):
+        with pytest.raises(VideoError, match="Bad fps"):
+            pipeline.build_video(
+                conn, series, chapter, _artifact_config(), profile,
+                client=FakeClient(), log=lambda m: None,
+                video_mode="frame-animation", fps=bad,
+            )
 
 
 def test_build_video_sequence_stills_provider_renders_as_panels(harness):

@@ -43,9 +43,13 @@ provider = "runway"           # model empty -> gen4_image
 
 Arms are config overrides, nothing else — adding one never requires code.
 Frame-animation-mode arms take `fps`, `max_frames`, `interp_fps`, `critic`,
-and `resolution` instead (`resolution` is frame-animation-only because the
-outpainting ratio derives from it; `interp_fps` is assembly-only and never
-changes generated frames — it only affects `--clips` playback). Validation
+`director`, and `resolution` instead (`resolution` is frame-animation-only
+because the outpainting ratio derives from it; `interp_fps` is
+assembly-only and never changes generated frames — it only affects
+`--clips` playback; `director = true` swaps the plain loop for the
+instruct/assess/revise one in `evals/imagegen/director.py` — per-model
+instructions, judge-verdict revisions, trajectories in the manifest — and
+conflicts with `critic`, which it subsumes). Validation
 is strict: unknown keys, bad modes, duplicate/unsafe arm names,
 non-positive durations, out-of-mode knobs, and missing panels are all
 rejected. Panel paths resolve from the cwd first, then relative to the

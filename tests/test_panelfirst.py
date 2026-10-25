@@ -23,7 +23,7 @@ from entertainment_harness.video.panelfirst import (
     parse_groups,
     segments_from_groups,
 )
-from entertainment_harness.video.script import VideoError
+from entertainment_harness.video.script import SCRIPT_GUIDANCE_PLAIN, VideoError
 
 GB = 10**9
 
@@ -482,5 +482,7 @@ def test_build_panel_first_script_vision_verify_judges_against_pages(
 def test_cache_key_ignores_boxes():
     a = [Beat(1, 1, (0.0, 0.0, 0.5, 0.5), "one")]
     b = [Beat(1, 1, (0.1, 0.1, 0.9, 0.9), "one")]
-    assert _cache_key(a, "") == _cache_key(b, "")
-    assert _cache_key(a, "x") != _cache_key(a, "")
+    assert _cache_key(a, "", "") == _cache_key(b, "", "")
+    assert _cache_key(a, "x", "") != _cache_key(a, "", "")
+    # Delivery guidance (plain vs drama voice) busts the grouping cache.
+    assert _cache_key(a, "", SCRIPT_GUIDANCE_PLAIN) != _cache_key(a, "", "drama")

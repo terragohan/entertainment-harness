@@ -51,7 +51,9 @@ Category-specific members (also enforced by the conformance kit):
   per-quant remote view), `generate(model, prompt, images=None, num_ctx=16384)`.
 - `sources`: `search()`, `get_series()`, `chapters()`, `download_pages()`,
   `looks_like_id()` (identified by registration key, no `name` needed).
-- `tts`: `default_voice: str`, `synthesize(text, voice, dest)`.
+- `tts`: `default_voice: str`, `synthesize(text, voice, dest)`. Optional
+  `script_guidance: str` — a delivery-phrasing clause (e.g. dramatic vs plain)
+  the script prompts inject; engines without it get the plain default.
 - `video_gen`: `animated: bool` (False = stills/Ken Burns fallback),
   `generate_segment(image, segment, duration, workdir)`.
 - `frames`: `animated: bool`, `generate_frames(image, segment, duration, workdir)`.

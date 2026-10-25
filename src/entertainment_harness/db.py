@@ -177,13 +177,11 @@ def fold_narrations_into_recaps(conn: sqlite3.Connection) -> None:
         # and runs on a later connect().
 
 
-def connect(db_path: Path | None = None) -> sqlite3.Connection:
-    """Open (creating + migrating if needed) the harness database."""
-    path = db_path if db_path is not None else data_dir() / DB_FILENAME
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+def create_schema(conn: sqlite3.Connection) -> None:
+    """Create the harness schema on a fresh connection: SCHEMA plus the
+    additive ALTER history. Also used by cloud staging (store/d1.py) so
+    staged snapshot/baseline files have exactly the live DB's columns —
+    the row diff compares SELECT * across both files."""
     conn.executescript(SCHEMA)
     # series.kind: manga (default) | book | comic — imported via 'eh import'.
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(series)")}
@@ -235,6 +233,16 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
             "ALTER TABLE recaps ADD COLUMN standalone INTEGER NOT NULL DEFAULT 0"
         )
         conn.commit()
+
+
+def connect(db_path: Path | None = None) -> sqlite3.Connection:
+    """Open (creating + migrating if needed) the harness database."""
+    path = db_path if db_path is not None else data_dir() / DB_FILENAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    create_schema(conn)
     # One-time narrations fold-in; self-guarding (no-op once every narrated
     # chapter has a full-detail recaps row), so it is safe to run on every
     # open — e.g. after an 'eh index' rebuild repopulates narrations.
